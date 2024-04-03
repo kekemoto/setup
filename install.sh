@@ -34,7 +34,11 @@ install_asdf_plugin(){
   fi
 }
 
-# for install ASDF
+# for Python on Ubuntu
+# sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
+
+# 必要なコマンドが入っているか
+# for install asdf
 require_command git
 require_command curl
 require_command gcc
@@ -42,6 +46,7 @@ require_command gcc
 require_command make
 require_command unzip
 
+# プラグイン
 if command -v asdf >/dev/null; then
   . "$HOME/.asdf/asdf.sh"
   install_asdf_plugin python 3.10.14 https://github.com/danhper/asdf-python.git
@@ -57,7 +62,10 @@ else
   echo "installed asdf"
 fi
 
+# bash
 cp -f ./.bashrc $HOME/ || true
+
+# Neovim
 mkdir -p $HOME/.config
 cp -fr ./nvim $HOME/.config/ || true
 

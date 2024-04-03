@@ -1,10 +1,19 @@
-HISTSIZE=1000
-HISTFILESIZE=2000
-HISTCONTROL=ignoredups:ignorespace
+export HISTSIZE=1000
+export HISTFILESIZE=10000
+export HISTCONTROL=ignoredups:ignorespace
 
-PS1="\u@\h \D{%F %T} \w \$ "
+export PS1="\u@\h \D{%F %T} \w \$ "
+export EDITOR=nvim
 
-alias bashrc='vim $HOME/.bashrc; source $HOME/.bashrc'
+alias bashrc='. $HOME/.bashrc'
+
+alias ls='ls -a'
+alias ll='ls -al'
+
+alias gs='git status'
+alias ga='git add -A'
+alias gc='git commit'
+alias gl='git log'
 
 # ASDF
 . "$HOME/.asdf/asdf.sh"
