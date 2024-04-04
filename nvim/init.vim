@@ -13,7 +13,6 @@ set undodir=~/.vim_undo
 set undofile
 set backspace=2
 
-
 set confirm
 set autoread
 set mouse=a
@@ -54,15 +53,15 @@ function! SafeSystem(command, error_message) abort
 endfunction
 
 " 自動フォーマット
-call system("type npx")
-if v:shell_error == 0
-  function! PrettierFmt() abort
-    call SafeSystem("npx prettier --write " . expand("%"), 'prettier')
-    e
-  endfunction
-
-  autocmd BufWritePost *.js,*.jsx,*.mjs,*.ts,*.tsx,*.css,*.less,*.scss,*.json,*.graphql,*.gql,*.markdown,*.md,*.mdown,*.mkd,*.mkdn,*.mdx,*.vue,*.svelte,*.yml,*.yaml,*.html,*.php,*.rb,*.ruby,*.xml call PrettierFmt()
-endif
+" call system("type npx")
+" if v:shell_error == 0
+"   function! PrettierFmt() abort
+"     call SafeSystem("npx prettier --write " . expand("%"), 'prettier')
+"     e
+"   endfunction
+" 
+"   autocmd BufWritePost *.js,*.jsx,*.mjs,*.ts,*.tsx,*.css,*.less,*.scss,*.json,*.graphql,*.gql,*.markdown,*.md,*.mdown,*.mkd,*.mkdn,*.mdx,*.vue,*.svelte,*.yml,*.yaml,*.html,*.php,*.rb,*.ruby,*.xml call PrettierFmt()
+" "endif
 
 " Go
 autocmd FileType go setlocal noexpandtab

@@ -37,6 +37,11 @@ install_asdf_plugin(){
 # for Python on Ubuntu
 # sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
 
+if [ $(pwd) != "$HOME/setup" ]; then
+  echo "The setup location is different."
+  exit 1
+fi
+
 # 必要なコマンドが入っているか
 # for install asdf
 require_command git
@@ -56,10 +61,8 @@ if command -v asdf >/dev/null; then
   install_asdf_plugin jq     1.7.1   https://github.com/lsanwick/asdf-jq.git
   install_asdf_plugin fzf    0.48.1  https://github.com/kompiro/asdf-fzf.git
   install_asdf_plugin fd     9.0.0   https://gitlab.com/wt0f/asdf-fd.git
-  echo "installed asdf plugin"
 else
   install_asdf
-  echo "installed asdf"
 fi
 
 # bash
