@@ -1,4 +1,4 @@
-export HISTSIZE=1000
+export HISTSIZE=10000
 export HISTFILESIZE=10000
 export HISTCONTROL=ignoredups:ignorespace
 
@@ -9,7 +9,9 @@ if [ -f ~/.bashrc_local ]; then
   . ~/.bashrc_local
 fi
 
+# -----
 # Alias
+# -----
 
 alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
 alias bashrc='nvim ~/setup/.bashrc && apply'
@@ -21,17 +23,23 @@ alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias ls='ls -a'
 alias ll='ls -al'
 
+# -----
 # Git
+# -----
 
 alias gs='git status'
-alias ga='git add -A'
+alias ga='git add'
+alias gaa='git add -A'
 alias gc='git commit'
 alias gb='git branch'
 alias gba='git branch --all'
 alias gl='git log'
 alias gd='git diff'
+alias gsw='git switch'
 
+# -----
 # Docker
+# -----
 
 alias di="docker image"
 alias dc="docker container"
@@ -46,20 +54,24 @@ de(){
 }
 
 dn(){
-  dc ls -a --format json | jq '.Names' | tr -d '"' | fzf +m
+  dc ls -a --format json | jq '.Names' | tr -d '"' | fzf
 }
 
+# -----
 # fzf
+# -----
 
-export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border"
+# https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.bash
+source ~/setup/key-bindings.bash
 
 fcd(){
   cd ~
-  local path=$(fd . | fzf +m)
-  cd $path 2>/dev/null || cd $(dirname $path)
+  cd $(fd . | fzf)
 }
 
+# -----
 # ASDF
+# -----
 
 . "$HOME/.asdf/asdf.sh"
 . "$HOME/.asdf/completions/asdf.bash"

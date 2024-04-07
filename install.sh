@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 set -eu
 
 require_command() {
@@ -34,15 +33,16 @@ install_asdf_plugin(){
   fi
 }
 
-# for Python on Ubuntu
-# sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
 
 if [ $(pwd) != "$HOME/setup" ]; then
   echo "The setup location is different."
   exit 1
 fi
 
+# ---------
 # 必要なコマンドが入っているか
+# ---------
+
 # for install asdf
 require_command git
 require_command curl
@@ -51,7 +51,13 @@ require_command gcc
 require_command make
 require_command unzip
 
+# for Python on Ubuntu
+# sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
+
+# ---------
 # プラグイン
+# ---------
+
 if command -v asdf >/dev/null; then
   . "$HOME/.asdf/asdf.sh"
   install_asdf_plugin python 3.10.14 https://github.com/danhper/asdf-python.git
@@ -65,11 +71,22 @@ else
   install_asdf
 fi
 
+# ---------
 # bash
+# ---------
+
 cp -f ./.bashrc $HOME/ || true
 
+# ---------
 # Neovim
+# ---------
+
 mkdir -p $HOME/.config
 cp -fr ./nvim $HOME/.config/ || true
+
+# vim-plug
+if [ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/autoload/plug.vim" ]; then
+  sh -c 'curl -fLo "${XDG_DATA_HOME:-$HOME/.local/share}"/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
+fi
 
 echo "DONE"
