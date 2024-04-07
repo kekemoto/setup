@@ -115,11 +115,6 @@ tnoremap <C-w> <C-\><C-n>
 filetype plugin indent on
 call plug#begin()
 " 補完
-" Plug 'hrsh7th/nvim-cmp'
-" Plug 'hrsh7th/cmp-nvim-lsp'
-" Plug 'hrsh7th/cmp-buffer'
-" Plug 'hrsh7th/cmp-path'
-" Plug 'hrsh7th/cmp-cmdline'
 Plug 'echasnovski/mini.completion'
 call plug#end()
 
