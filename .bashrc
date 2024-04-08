@@ -5,10 +5,6 @@ export HISTCONTROL=ignoredups:ignorespace
 export PS1="\n\u@\h \D{%F %T} \w\n\$ "
 export EDITOR=nvim
 
-if [ -f ~/.bashrc_local ]; then
-  . ~/.bashrc_local
-fi
-
 # -----
 # Alias
 # -----
@@ -75,3 +71,11 @@ fcd(){
 
 . "$HOME/.asdf/asdf.sh"
 . "$HOME/.asdf/completions/asdf.bash"
+
+# -----
+# ローカルの設定ファイル
+# -----
+
+if [ -f ~/.bashrc_local ]; then
+  . ~/.bashrc_local
+fi

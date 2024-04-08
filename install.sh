@@ -67,6 +67,7 @@ if command -v asdf >/dev/null; then
   install_asdf_plugin jq     1.7.1   https://github.com/lsanwick/asdf-jq.git
   install_asdf_plugin fzf    0.48.1  https://github.com/kompiro/asdf-fzf.git
   install_asdf_plugin fd     9.0.0   https://gitlab.com/wt0f/asdf-fd.git
+  install_asdf_plugin rg     14.1.0  https://gitlab.com/wt0f/asdf-ripgrep.git
 else
   install_asdf
 fi

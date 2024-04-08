@@ -3,14 +3,15 @@ syntax on
 set encoding=utf-8
 set number
 set autoindent
-set expandtab
-set tabstop=2
-set shiftwidth=2
+set smartindent
+" set expandtab
+set tabstop=4
+set shiftwidth=4
 set list listchars=tab:\|\ 
 " ディレクトリをあらかじめ作っておく必要がある
-set directory=~/.vim_swp
 set undodir=~/.vim_undo
 set undofile
+set noswapfile
 set backspace=2
 
 set confirm
@@ -79,10 +80,8 @@ nnoremap <Leader>t :tabnew<CR>
 nnoremap <Leader>s :source ~/.vimrc<CR>
 nnoremap <Leader>e :Ex<CR>
 if has('nvim')
-  nnoremap <Leader>v :e ~/.config/nvim/init.vim<CR>
   nnoremap <Leader>s :source ~/.config/nvim/init.vim<CR>
 else
-  nnoremap <Leader>v :e ~/.vimrc<CR>
   nnoremap <Leader>s :source ~/.vimrc<CR>
 endif
 if has('nvim')
@@ -116,6 +115,8 @@ filetype plugin indent on
 call plug#begin()
 " 補完
 Plug 'echasnovski/mini.completion'
+" grep
+Plug 'jremmen/vim-ripgrep'
 call plug#end()
 
 lua <<EOF
