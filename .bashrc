@@ -20,6 +20,25 @@ alias ls='ls -a'
 alias ll='ls -al'
 
 # -----
+# Helper
+# -----
+
+__confirm(){
+  echo -n "$1 (y/N) : "
+  read -r yn
+  case $yn in
+    y|Y)
+      echo '実行します'
+      return 0
+      ;;
+    *)
+      echo '中止しました'
+      return 1
+      ;;
+  esac
+}
+
+# -----
 # Git
 # -----
 
@@ -32,6 +51,11 @@ alias gba='git branch --all'
 alias gl='git log'
 alias gd='git diff'
 alias gsw='git switch'
+
+grh(){
+  __confirm "git reset --hard を実行しますか？" \
+    && git reset --hard HEAD
+}
 
 # -----
 # Docker
@@ -62,7 +86,11 @@ source ~/setup/key-bindings.bash
 
 fcd(){
   cd ~
-  cd $(fd . | fzf)
+  if [ -z $1 ]; then
+    cd $(fd . | fzf)
+  else
+    cd $(fd . | fzf --query $1)
+  fi
 }
 
 # -----

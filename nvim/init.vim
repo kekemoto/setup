@@ -117,6 +117,8 @@ call plug#begin()
 Plug 'echasnovski/mini.completion'
 " grep
 Plug 'jremmen/vim-ripgrep'
+" syntax highlight for twig
+Plug 'sheerun/vim-polyglot'
 call plug#end()
 
 lua <<EOF
