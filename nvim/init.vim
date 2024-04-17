@@ -64,6 +64,12 @@ endfunction
 "   autocmd BufWritePost *.js,*.jsx,*.mjs,*.ts,*.tsx,*.css,*.less,*.scss,*.json,*.graphql,*.gql,*.markdown,*.md,*.mdown,*.mkd,*.mkdn,*.mdx,*.vue,*.svelte,*.yml,*.yaml,*.html,*.php,*.rb,*.ruby,*.xml call PrettierFmt()
 " "endif
 
+" 開いているファイルのパスをクリップボードに登録
+" Filepath Copy
+function! FC() abort
+  let @+ = expand("%")
+endfunction
+
 " Go
 autocmd FileType go setlocal noexpandtab
 autocmd FileType go setlocal tabstop=4
@@ -119,11 +125,15 @@ Plug 'echasnovski/mini.completion'
 Plug 'jremmen/vim-ripgrep'
 " syntax highlight for twig
 Plug 'sheerun/vim-polyglot'
+" ファイルファインダー
+Plug 'ctrlpvim/ctrlp.vim'
 call plug#end()
 
 lua <<EOF
   require('mini.completion').setup()
 EOF
+
+let g:ctrlp_custom_ignore = 'node_modules\|DS_Store\|git'
 
 " neovim のみの設定
 if has('nvim')

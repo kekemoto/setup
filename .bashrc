@@ -48,9 +48,24 @@ alias gaa='git add -A'
 alias gc='git commit'
 alias gb='git branch'
 alias gba='git branch --all'
-alias gl='git log'
 alias gd='git diff'
 alias gsw='git switch'
+
+gl(){
+  local num
+  if [ -z $1 ]; then
+    num=3
+  else
+    num=$1
+  fi
+
+  git log --reverse -n $num
+}
+
+grs(){
+  __confirm "git reset --soft を実行しますか？" \
+    && git reset --soft HEAD~
+}
 
 grh(){
   __confirm "git reset --hard を実行しますか？" \
@@ -68,13 +83,19 @@ alias dcu="docker compose up -d"
 alias dcs="docker compose stop"
 alias dcd="docker compose down"
 alias dcl="docker compose logs"
+alias dcr="dcd && dcu"
 
 de(){
   docker exec -it $1 bash
 }
 
-dn(){
-  dc ls -a --format json | jq '.Names' | tr -d '"' | fzf
+# dn(){
+#   dc ls -a --format json | jq '.Names' | tr -d '"' | fzf
+# }
+
+dd(){
+  dc stop $1
+  dc rm $1
 }
 
 # -----
