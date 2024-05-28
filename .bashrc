@@ -42,13 +42,18 @@ __confirm(){
 # Git
 # -----
 
+# 補完
+if [ -f ~/.config/git/git-completions.bash ]; then
+  . ~/.config/git/git-completions.bash
+fi
+
 alias gs='git status'
+alias gf='git fetch --all --prune'
 alias ga='git add'
 alias gaa='git add -A'
 alias gc='git commit'
-alias gb='git branch'
-alias gba='git branch --all'
-alias gd='git diff'
+alias gb='git branch --all'
+alias gd='git diff HEAD'
 alias gsw='git switch'
 
 gl(){
@@ -64,6 +69,7 @@ gl(){
 
 grs(){
   __confirm "git reset --soft を実行しますか？" \
+    && git add -A \
     && git reset --soft HEAD~
 }
 
@@ -78,24 +84,29 @@ grh(){
 
 alias di="docker image"
 alias dc="docker container"
-alias dl="docker logs"
+alias dl="docker logs -f"
+alias dv="docker volume"
+alias dr="docker restart -t 5"
 alias dcu="docker compose up -d"
 alias dcs="docker compose stop"
-alias dcd="docker compose down"
-alias dcl="docker compose logs"
-alias dcr="dcd && dcu"
+alias dcd="docker compose down -t 5"
+alias dcl="docker compose logs -f"
+# alias dcr="docker compose restart -t 5"
 
 de(){
   docker exec -it $1 bash
 }
 
-# dn(){
-#   dc ls -a --format json | jq '.Names' | tr -d '"' | fzf
-# }
-
 dd(){
-  dc stop $1
-  dc rm $1
+  echo start
+  docker container stop -t 5 $1 > /dev/null
+  echo container stoped $1
+  docker container rm $1 > /dev/null
+  echo container removed $1
+  if [ ! -z $2 ]; then
+    docker image rm $2 > /dev/null
+    echo image removed $2
+  fi
 }
 
 # -----

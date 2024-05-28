@@ -4,7 +4,7 @@ set encoding=utf-8
 set number
 set autoindent
 set smartindent
-" set expandtab
+set expandtab
 set tabstop=4
 set shiftwidth=4
 set list listchars=tab:\|\ 
@@ -127,6 +127,10 @@ Plug 'jremmen/vim-ripgrep'
 Plug 'sheerun/vim-polyglot'
 " ファイルファインダー
 Plug 'ctrlpvim/ctrlp.vim'
+" HTMLタグを自動で閉じる
+Plug 'alvan/vim-closetag'
+" カッコの編集
+Plug 'tpope/vim-surround'
 call plug#end()
 
 lua <<EOF
