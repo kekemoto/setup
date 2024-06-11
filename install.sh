@@ -29,14 +29,15 @@ install_asdf_plugin(){
 }
 
 
+# ---------
+# メイン
+# ---------
+
+# 実行しているパスが正しいか
 if [ $(pwd) != "$HOME/setup" ]; then
   echo "The setup location is different."
   exit 1
 fi
-
-# ---------
-# メイン
-# ---------
 
 # 必要なコマンドが入っているか
 
@@ -53,8 +54,8 @@ require_command unzip
 
 # install asdf
 if ! command -v asdf >/dev/null; then
-  cd $HOME &&
-  ([ -e "$HOME/.asdf" ] || git clone https://github.com/asdf-vm/asdf.git .asdf) &&
+  cd $HOME
+  ([ -e "$HOME/.asdf" ] || git clone https://github.com/asdf-vm/asdf.git .asdf)
   . "$HOME/.asdf/asdf.sh"
 fi
 
@@ -69,14 +70,21 @@ install_asdf_plugin fzf    0.48.1  https://github.com/kompiro/asdf-fzf.git
 install_asdf_plugin fd     9.0.0   https://gitlab.com/wt0f/asdf-fd.git
 install_asdf_plugin rg     14.1.0  https://gitlab.com/wt0f/asdf-ripgrep.git
 
+cd $HOME/setup
+
 # bash
-rm $HOME/.bashrc
-cp ./.bashrc $HOME/
+if [ -f $HOME/.bashrc ]; then
+  rm $HOME/.bashrc
+fi
+pwd
+cp -rfp ./.bashrc $HOME/
 
 # Neovim
 mkdir -p $HOME/.config
-rm -rf $HOME/.config/nvim
-cp -fr ./nvim $HOME/.config/
+if [ -f $HOME/.config/nvim ]; then
+  rm -rf $HOME/.config/nvim
+fi
+cp -rf ./nvim $HOME/.config/
 
 # vim-plug
 if [ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/autoload/plug.vim" ]; then
