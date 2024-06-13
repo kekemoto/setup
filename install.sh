@@ -88,5 +88,6 @@ if [ ! -e "$HOME/.config/git/git-completion.bash" ]; then
   mkdir -p $HOME/.config/git
   curl -sS "https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash" -o "$HOME/.config/git/git-completion.bash"
 fi
+git config --global commit.template ~/setup/.gitmessages
 
 echo "DONE"

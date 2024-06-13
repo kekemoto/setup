@@ -5,6 +5,11 @@ export HISTCONTROL=ignoredups:ignorespace
 export PS1="\n\u@\h \D{%F %T} \w\n\$ "
 export EDITOR=nvim
 
+export COLOR_RED="\e[31m"
+export COLOR_GREEN="\e[32m"
+export COLOR_YELLOW="\e[33m"
+export COLOR_END="\e[m"
+
 # -----
 # Alias
 # -----
