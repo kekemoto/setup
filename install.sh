@@ -62,11 +62,11 @@ fi
 # intall asdf plugin
 . "$HOME/.asdf/asdf.sh"
 install_asdf_plugin python 3.12.2  https://github.com/danhper/asdf-python.git
-install_asdf_plugin nvim   0.9.5   https://github.com/richin13/asdf-neovim.git
+install_asdf_plugin nvim   0.10.0   https://github.com/richin13/asdf-neovim.git
 install_asdf_plugin tmux   3.4     https://github.com/aphecetche/asdf-tmux.git
-install_asdf_plugin node   21.7.1  https://github.com/asdf-vm/asdf-nodejs.git
+install_asdf_plugin node   22.3.0  https://github.com/asdf-vm/asdf-nodejs.git
 install_asdf_plugin jq     1.7.1   https://github.com/lsanwick/asdf-jq.git
-install_asdf_plugin fzf    0.48.1  https://github.com/kompiro/asdf-fzf.git
+install_asdf_plugin fzf    0.53.0  https://github.com/kompiro/asdf-fzf.git
 install_asdf_plugin fd     9.0.0   https://gitlab.com/wt0f/asdf-fd.git
 install_asdf_plugin rg     14.1.0  https://gitlab.com/wt0f/asdf-ripgrep.git
 
