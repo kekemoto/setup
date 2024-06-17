@@ -5,10 +5,10 @@ export HISTCONTROL=ignoredups:ignorespace
 export PS1="\n\u@\h \D{%F %T} \w\n\$ "
 export EDITOR=nvim
 
-export COLOR_RED="\e[31m"
-export COLOR_GREEN="\e[32m"
-export COLOR_YELLOW="\e[33m"
-export COLOR_END="\e[m"
+# export COLOR_RED="\e[31m"
+# export COLOR_GREEN="\e[32m"
+# export COLOR_YELLOW="\e[33m"
+# export COLOR_END="\e[m"
 
 # -----
 # Alias
@@ -16,14 +16,14 @@ export COLOR_END="\e[m"
 
 alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
 alias bashrc='nvim ~/setup/.bashrc && apply'
+alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
 alias tmuxrc='nvim ~/setup/.tmux.conf && apply'
 alias install='nvim ~/setup/install.sh && apply'
 
-alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
-
 alias ls='ls -a'
 alias ll='ls -al'
+alias setup='cd ~/setup'
 
 # -----
 # Helper

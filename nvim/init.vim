@@ -23,6 +23,7 @@ set foldlevel=99
 set clipboard+=unnamed
 let loaded_matchparen = 1
 set fileencodings=utf-8,sjis,iso-2022-jp,euc-jp
+set termguicolors
 
 " autocmd が二重に登録されないようにする
 " デフォルトのグループを kekemoto に設定"
@@ -131,13 +132,20 @@ Plug 'ctrlpvim/ctrlp.vim'
 Plug 'alvan/vim-closetag'
 " カッコの編集
 Plug 'tpope/vim-surround'
+" カラーテーマ
+Plug 'navarasu/onedark.nvim'
 call plug#end()
 
+" Plug 'echasnovski/mini.completion'
 lua <<EOF
   require('mini.completion').setup()
 EOF
 
+" Plug 'ctrlpvim/ctrlp.vim'
 let g:ctrlp_custom_ignore = 'node_modules\|DS_Store\|git'
+
+" Plug 'navarasu/onedark.nvim'
+colorscheme onedark
 
 " neovim のみの設定
 if has('nvim')
