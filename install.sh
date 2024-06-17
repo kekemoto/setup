@@ -76,8 +76,13 @@ cd $HOME/setup
 if [ -f $HOME/.bashrc ]; then
   rm $HOME/.bashrc
 fi
-pwd
 cp -rfp ./.bashrc $HOME/
+
+# tmux
+if [ -f $HOME/.tmux.conf ]; then
+  rm $HOME/.tmux.conf
+fi
+cp -rfp ./.tmux.conf $HOME/
 
 # Neovim
 mkdir -p $HOME/.config

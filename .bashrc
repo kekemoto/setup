@@ -17,6 +17,7 @@ export COLOR_END="\e[m"
 alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
 alias bashrc='nvim ~/setup/.bashrc && apply'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
+alias tmuxrc='nvim ~/.tmux.conf'
 alias install='nvim ~/setup/install.sh && apply'
 
 alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
