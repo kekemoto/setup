@@ -102,5 +102,6 @@ if [ ! -e "$HOME/.config/git/git-completion.bash" ]; then
   curl -sS "https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash" -o "$HOME/.config/git/git-completion.bash"
 fi
 git config --global commit.template ~/setup/.gitmessages
+git config --global alias.pushf 'push --force-with-lease --force-if-includes'
 
 echo "DONE"

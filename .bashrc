@@ -78,14 +78,29 @@ gl(){
   git log --reverse -n $num
 }
 
+gan(){
+  # git ls-files --others --exclude-standard -z | xargs -0 git add -N
+  git add -AN
+}
+
+gap(){
+  gan
+  git add -p "$@"
+}
+
+gpull(){
+  gf
+  git pull
+}
+
 grs(){
   __confirm "git reset --soft を実行しますか？" \
-    && git add -A \
     && git reset --soft HEAD~
 }
 
 grh(){
   __confirm "git reset --hard を実行しますか？" \
+    && git add -A \
     && git reset --hard HEAD
 }
 
@@ -105,7 +120,11 @@ alias dcl="docker compose logs -f"
 # alias dcr="docker compose restart -t 5"
 
 de(){
-  docker exec -it $1 bash
+  if [ -z $2 ]; then
+    docker exec -it $1 bash
+  else
+    docker exec -it $1 $2
+  fi
 }
 
 dd(){
