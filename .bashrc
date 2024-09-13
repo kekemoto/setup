@@ -44,6 +44,13 @@ __confirm(){
   esac
 }
 
+map(){
+    while read LINE
+    do
+        "$@" $LINE
+    done
+}
+
 alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
 alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
 alias color_black="tmux select-pane -P 'bg=black,fg=white'"
