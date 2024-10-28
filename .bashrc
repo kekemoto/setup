@@ -70,7 +70,7 @@ alias ga='git add'
 alias gaa='git add -A'
 alias gc='git commit'
 alias gcb='git commit -m backup --no-verify'
-alias gb='git branch --all'
+alias gb='git branch'
 alias gd='git diff HEAD'
 alias gsw='git switch'
 
