@@ -70,6 +70,7 @@ install_asdf_plugin fzf       0.53.0 https://github.com/kompiro/asdf-fzf.git
 install_asdf_plugin fd        9.0.0  https://gitlab.com/wt0f/asdf-fd.git
 install_asdf_plugin rg        14.1.0 https://gitlab.com/wt0f/asdf-ripgrep.git
 install_asdf_plugin redis-cli 7.4.0  https://github.com/NeoHsu/asdf-redis-cli.git
+install_asdf_plugin mysql     8.0.33 https://github.com/iroddis/asdf-mysql.git
 
 cd $HOME/setup
 
@@ -104,5 +105,6 @@ if [ ! -e "$HOME/.config/git/git-completion.bash" ]; then
 fi
 git config --global commit.template ~/setup/.gitmessages
 git config --global alias.pushf 'push --force-with-lease --force-if-includes'
+git config --global --add --bool push.autoSetupRemote true
 
 echo "DONE"

@@ -118,6 +118,14 @@ endif
 
 tnoremap <C-w> <C-\><C-n>
 
+" サブモードで視覚的に移動する
+" @see https://zenn.dev/mattn/articles/83c2d4c7645faa
+nmap gj gj<SID>g
+nmap gk gk<SID>g
+nnoremap <script> <SID>gj gj<SID>g
+nnoremap <script> <SID>gk gk<SID>g
+nmap <SID>g <Nop>
+
 filetype plugin indent on
 call plug#begin()
 " 補完
