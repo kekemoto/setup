@@ -111,6 +111,14 @@ grh(){
     && git reset --hard HEAD
 }
 
+g_rebase(){
+  local now=$(git branch --show-current)
+  git switch main && \
+  gpull && \
+  git switch $now && \
+  git rebase main
+}
+
 # -----
 # Docker
 # -----

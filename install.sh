@@ -105,6 +105,7 @@ if [ ! -e "$HOME/.config/git/git-completion.bash" ]; then
 fi
 git config --global commit.template ~/setup/.gitmessages
 git config --global alias.pushf 'push --force-with-lease --force-if-includes'
+git config --global alias.unstage 'restore --staged :/'
 git config --global --add --bool push.autoSetupRemote true
 
 echo "DONE"

@@ -84,8 +84,8 @@ nnoremap <Leader>w :w<CR>
 nnoremap <Leader>q :q<CR>
 nnoremap <Leader>x :x<CR>
 nnoremap <Leader>t :tabnew<CR>
-nnoremap <Leader>s :source ~/.vimrc<CR>
 nnoremap <Leader>e :Ex<CR>
+nnoremap <Leader>b :CtrlPBuffer<CR>
 if has('nvim')
   nnoremap <Leader>s :source ~/.config/nvim/init.vim<CR>
 else
@@ -103,15 +103,14 @@ if has('nvim')
   nnoremap <Leader>dn :lua vim.diagnostic.goto_next()<CR>
   nnoremap <Leader>dp :lua vim.diagnostic.goto_prev()<CR>
 endif
-
+inoremap <C-a> <End><Enter>
+inoremap <C-o> <C-x><C-o>
 inoremap { {}<LEFT>
 inoremap [ []<LEFT>
 inoremap ( ()<LEFT>
 inoremap " ""<LEFT>
 inoremap ' ''<LEFT>
 inoremap ` ``<LEFT>
-inoremap <C-a> <End><Enter>
-inoremap <C-o> <C-x><C-o>
 if !has('nvim')
   autocmd BufRead *.html inoremap <buffer> < <><LEFT>
 endif
