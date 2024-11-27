@@ -72,6 +72,14 @@ install_asdf_plugin rg        14.1.0 https://gitlab.com/wt0f/asdf-ripgrep.git
 install_asdf_plugin redis-cli 7.4.0  https://github.com/NeoHsu/asdf-redis-cli.git
 install_asdf_plugin mysql     8.0.33 https://github.com/iroddis/asdf-mysql.git
 
+if command -v pip >/dev/null; then
+  if ! command -v mycli >/dev/null; then
+    pip install -U mycli
+  fi
+else
+  echo "mycli はインストールできませんでした（pip が見つからなかった）"
+fi
+
 cd $HOME/setup
 
 # bash
