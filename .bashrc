@@ -59,17 +59,22 @@ alias color_black="tmux select-pane -P 'bg=black,fg=white'"
 # Sound
 # -----
 
-bell(){
+beep(){
+  local result=$?
   if command -v powershell.exe >/dev/null; then
     # WSL の場合
-    bell_good
+    if [ $result -eq 0 ]; then
+      beep_good
+    else
+      beep_bad
+    fi
   else
     # Linux の場合
     echo -e '\a'
   fi
 }
 
-bell_beep(){
+beep_beep(){
   local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
   local do="[console]::beep(440,500);" # ド
   local re="[console]::beep(494,500);" # レ
@@ -77,7 +82,7 @@ bell_beep(){
   powershell.exe -Command $lag$mi$re$do
 }
 
-bell_good(){
+beep_good(){
   local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
   local do="[console]::beep(440,100);" # ド
   local re="[console]::beep(494,100);" # レ
@@ -92,7 +97,7 @@ bell_good(){
   powershell.exe -Command $lag$fas$fa$re$sos$so$res$so$si
 }
 
-bell_bad(){
+beep_bad(){
   local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
   local do="[console]::beep(440,100);" # ド
   local re="[console]::beep(494,100);" # レ
