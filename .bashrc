@@ -55,7 +55,55 @@ alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
 alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
 alias color_black="tmux select-pane -P 'bg=black,fg=white'"
 
-alias bell="echo -e '\a'"
+# -----
+# Sound
+# -----
+
+bell(){
+  if command -v powershell.exe >/dev/null; then
+    # WSL の場合
+    bell_good
+  else
+    # Linux の場合
+    echo -e '\a'
+  fi
+}
+
+bell_beep(){
+  local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
+  local do="[console]::beep(440,500);" # ド
+  local re="[console]::beep(494,500);" # レ
+  local mi="[console]::beep(554,500);" # ミ
+  powershell.exe -Command $lag$mi$re$do
+}
+
+bell_good(){
+  local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
+  local do="[console]::beep(440,100);" # ド
+  local re="[console]::beep(494,100);" # レ
+  local res="[console]::beep(523,100);" # レ#
+  local mi="[console]::beep(554,100);" # ミ
+  local fa="[console]::beep(587,100);" # ファ
+  local fas="[console]::beep(622,100);" # ファ#
+  local so="[console]::beep(659,100);" # ソ
+  local sos="[console]::beep(699,100);" # ソ#
+  local ra="[console]::beep(740,100);" # ラ
+  local si="[console]::beep(831,100);" # シ
+  powershell.exe -Command $lag$fas$fa$re$sos$so$res$so$si
+}
+
+bell_bad(){
+  local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
+  local do="[console]::beep(440,100);" # ド
+  local re="[console]::beep(494,100);" # レ
+  local mi="[console]::beep(554,100);" # ミ
+  local fa="[console]::beep(587,100);" # ファ
+  local fa="[console]::beep(622,100);" # ファ#
+  local so="[console]::beep(659,100);" # ソ
+  local ra="[console]::beep(740,100);" # ラ
+  local si="[console]::beep(831,100);" # シ
+  powershell.exe -Command $lag$si$fa$fa$fa$mi$re$do
+}
 
 # -----
 # Git
