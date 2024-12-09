@@ -110,6 +110,22 @@ beep_bad(){
   powershell.exe -Command $lag$si$fa$fa$fa$mi$re$do
 }
 
+# simple sound
+beep_success(){
+  local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
+  local fa="[console]::beep(587,100);" # ファ
+  local si="[console]::beep(831,100);" # シ
+  powershell.exe -Command $lag$fa$si$si
+}
+
+# simple sound
+beep_fail(){
+  local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
+  local do="[console]::beep(440,100);" # ド
+  local fa="[console]::beep(587,100);" # ファ
+  powershell.exe -Command $lag$fa$do$do
+}
+
 # -----
 # Git
 # -----
