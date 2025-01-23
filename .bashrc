@@ -64,9 +64,11 @@ beep(){
   if command -v powershell.exe >/dev/null; then
     # WSL の場合
     if [ $result -eq 0 ]; then
-      beep_good
+      beep_success
+      echo OK
     else
-      beep_bad
+      beep_fail
+      echo ERROR
     fi
   else
     # Linux の場合
@@ -127,6 +129,56 @@ beep_fail(){
 }
 
 # -----
+# Command
+# -----
+
+# rg で検索し、置換する
+rgsed(){
+  read -p "検索クエリを入力してください: " query
+  read -p "置換する文字列を入力してください: " replace
+  mapfile -t results < <(rg --vimgrep "$query")
+  for line in "${results[@]}"; do
+    _rgsed $line
+  done
+}
+
+_rgsed(){
+  line="$@"
+
+  # 検索結果のパース
+  file=$(echo "$line" | awk -F ':' '{print $1}')
+  lineno=$(echo "$line" | awk -F ':' '{print $2}')
+  text=$(echo "$line" | awk -F ':' '{print $4}')
+
+  # 結果の表示
+  echo "======"
+  echo "$file : $lineno"
+  echo "$text"
+
+  # 操作の選択
+  echo "------"
+  echo "r: 置換"
+  echo "n: 次へ"
+  echo "e: エディターで開く"
+  read -p "入力: " action
+
+  case $action in
+    r)
+      sed -i "${lineno}s|$query|$replace|" "$file"
+      ;;
+    n)
+      ;;
+    e)
+      nvim +$lineno "$file"
+      _rgsed $line
+      ;;
+    *)
+      _rgsed $line
+      ;;
+  esac
+}
+
+# -----
 # Git
 # -----
 
@@ -143,7 +195,6 @@ alias gc='git commit'
 alias gcb='git commit -m backup --no-verify'
 alias gb='git branch'
 alias gd='git diff HEAD'
-alias gsw='git switch'
 
 gl(){
   local num
@@ -166,11 +217,6 @@ gap(){
   git add -p "$@"
 }
 
-gpull(){
-  gf
-  git pull
-}
-
 grs(){
   __confirm "git reset --soft を実行しますか？" \
     && git reset --soft HEAD~
@@ -182,12 +228,25 @@ grh(){
     && git reset --hard HEAD
 }
 
+gpull(){
+  gf
+  git pull
+}
+
 g_rebase(){
   local now=$(git branch --show-current)
   git switch main && \
   gpull && \
   git switch $now && \
   git rebase main
+}
+
+g_save(){
+  git stash save -u
+}
+
+g_pop(){
+  git stash pop
 }
 
 # -----
