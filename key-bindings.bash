@@ -132,3 +132,13 @@ if [[ "${FZF_ALT_C_COMMAND-x}" != "" ]]; then
   bind -m vi-command '"\ec": "\C-z\ec\C-z"'
   bind -m vi-insert '"\ec": "\C-z\ec\C-z"'
 fi
+
+
+fzf_git_status() {
+  local selected="$(git status -s | awk '{print $2}' | fzf)"
+  READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
+  READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
+}
+bind -m emacs-standard -x '"\C-g": fzf_git_status'
+bind -m vi-command -x '"\C-g": fzf_git_status'
+bind -m vi-insert -x '"\C-g": fzf_git_status'
