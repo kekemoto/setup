@@ -49,6 +49,11 @@ require_command gcc
 require_command make
 require_command unzip
 
+# デフォルトのシェルを変更
+if [ "$SHELL" != "/bin/bash" ]; then
+  chsh -s /bin/bash
+fi
+
 # for Python on Ubuntu
 # sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
 

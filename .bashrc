@@ -305,7 +305,6 @@ fcd(){
 # -----
 
 . "$HOME/.asdf/asdf.sh"
-. "$HOME/.asdf/completions/asdf.bash"
 
 # -----
 # ローカルの設定ファイル
