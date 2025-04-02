@@ -13,6 +13,8 @@ set undodir=~/.vim_undo
 set undofile
 set noswapfile
 set backspace=2
+set ignorecase " 検索のとき大文字小文字に関係なくヒット
+set smartcase " 検索する文字に一文字でも大文字があれば、大文字小文字を厳密に検索
 
 set confirm
 set autoread
