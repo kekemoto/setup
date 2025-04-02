@@ -141,13 +141,44 @@ Plug 'ctrlpvim/ctrlp.vim'
 Plug 'alvan/vim-closetag'
 " カッコの編集
 Plug 'tpope/vim-surround'
+" git 表示
+Plug 'lewis6991/gitsigns.nvim'
 " カラーテーマ
 Plug 'navarasu/onedark.nvim'
 call plug#end()
 
-" Plug 'echasnovski/mini.completion'
 lua <<EOF
+  -- Plug 'echasnovski/mini.completion'
   require('mini.completion').setup()
+  -- Plug 'lewis6991/gitsigns.nvim'
+  require('gitsigns').setup {
+    on_attach = function(bufnr)
+      local gitsigns = require('gitsigns')
+
+      local function map(mode, l, r, opts)
+        opts = opts or {}
+        opts.buffer = bufnr
+        vim.keymap.set(mode, l, r, opts)
+      end
+
+      -- Navigation
+      map('n', '<Leader>j', function()
+        if vim.wo.diff then
+          vim.cmd.normal({']c', bang = true})
+        else
+          gitsigns.nav_hunk('next')
+        end
+      end)
+
+      map('n', '<Leader>k', function()
+        if vim.wo.diff then
+          vim.cmd.normal({'[c', bang = true})
+        else
+          gitsigns.nav_hunk('prev')
+        end
+      end)
+    end
+  }
 EOF
 
 " Plug 'ctrlpvim/ctrlp.vim'
