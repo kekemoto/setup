@@ -51,9 +51,105 @@ map(){
     done
 }
 
+is_wsl(){
+  command -v powershell.exe >/dev/null
+}
+
+append(){
+  cat -
+  echo $1
+}
+
 alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
 alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
 alias color_black="tmux select-pane -P 'bg=black,fg=white'"
+
+# -----
+# Command
+# -----
+
+# 標準出力の内容をクリップボードに
+yank(){
+  if is_wsl; then
+    iconv -t cp932 | clip.exe
+  else
+    echo "非対応です" >&2
+  fi
+}
+
+# rg で検索し、置換する
+rgsed(){
+  read -p "検索クエリを入力してください: " query
+  read -p "置換する文字列を入力してください: " replace
+  mapfile -t results < <(rg --vimgrep "$query")
+  for line in "${results[@]}"; do
+    _rgsed $line
+  done
+}
+
+_rgsed(){
+  line="$@"
+
+  # 検索結果のパース
+  file=$(echo "$line" | awk -F ':' '{print $1}')
+  lineno=$(echo "$line" | awk -F ':' '{print $2}')
+  text=$(echo "$line" | awk -F ':' '{print $4}')
+
+  # 結果の表示
+  echo "======"
+  echo "$file : $lineno"
+  echo "$text"
+
+  # 操作の選択
+  echo "------"
+  echo "r: 置換"
+  echo "n: 次へ"
+  echo "e: エディターで開く"
+  read -p "入力: " action
+
+  case $action in
+    r)
+      sed -i "${lineno}s|$query|$replace|" "$file"
+      ;;
+    n)
+      ;;
+    e)
+      nvim +$lineno "$file"
+      _rgsed $line
+      ;;
+    *)
+      _rgsed $line
+      ;;
+  esac
+}
+
+# 標準入力の内容を LLM に送る
+llm(){
+  local message=$(cat -)
+  local model=${1:-claude-3-5-haiku-latest}
+  local tmpfile=$(mktemp)
+
+  curl -sS --fail-with-body -o "$tmpfile" https://api.anthropic.com/v1/messages \
+       --header "x-api-key: $ANTHROPIC_API_KEY" \
+       --header "anthropic-version: 2023-06-01" \
+       --header "content-type: application/json" \
+       --data \
+  '{
+      "model": "'$model'",
+      "max_tokens": 1024,
+      "messages": [
+          {"role": "user", "content": "'$message'"}
+      ]
+  }'
+
+  if [ $? -ne 0 ]; then
+    cat "$tmpfile"
+  else
+    jq -r '.content[0].text' "$tmpfile"
+  fi
+
+  rm -f "$tmpfile"
+}
 
 # -----
 # Sound
@@ -61,7 +157,7 @@ alias color_black="tmux select-pane -P 'bg=black,fg=white'"
 
 beep(){
   local result=$?
-  if command -v powershell.exe >/dev/null; then
+  if is_wsl; then
     # WSL の場合
     if [ $result -eq 0 ]; then
       beep_success
@@ -126,56 +222,6 @@ beep_fail(){
   local do="[console]::beep(440,100);" # ド
   local fa="[console]::beep(587,100);" # ファ
   powershell.exe -Command $lag$fa$do$do
-}
-
-# -----
-# Command
-# -----
-
-# rg で検索し、置換する
-rgsed(){
-  read -p "検索クエリを入力してください: " query
-  read -p "置換する文字列を入力してください: " replace
-  mapfile -t results < <(rg --vimgrep "$query")
-  for line in "${results[@]}"; do
-    _rgsed $line
-  done
-}
-
-_rgsed(){
-  line="$@"
-
-  # 検索結果のパース
-  file=$(echo "$line" | awk -F ':' '{print $1}')
-  lineno=$(echo "$line" | awk -F ':' '{print $2}')
-  text=$(echo "$line" | awk -F ':' '{print $4}')
-
-  # 結果の表示
-  echo "======"
-  echo "$file : $lineno"
-  echo "$text"
-
-  # 操作の選択
-  echo "------"
-  echo "r: 置換"
-  echo "n: 次へ"
-  echo "e: エディターで開く"
-  read -p "入力: " action
-
-  case $action in
-    r)
-      sed -i "${lineno}s|$query|$replace|" "$file"
-      ;;
-    n)
-      ;;
-    e)
-      nvim +$lineno "$file"
-      _rgsed $line
-      ;;
-    *)
-      _rgsed $line
-      ;;
-  esac
 }
 
 # -----
