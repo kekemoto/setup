@@ -123,24 +123,24 @@ _rgsed(){
   esac
 }
 
-# 標準入力の内容を LLM に送る
 llm(){
+  #local message=$(jq -Rs .)
   local message=$(cat -)
   local model=${1:-claude-3-5-haiku-latest}
   local tmpfile=$(mktemp)
 
-  curl -sS --fail-with-body -o "$tmpfile" https://api.anthropic.com/v1/messages \
+  jq -n \
+    --arg model "$model" \
+    --arg content "$message" \
+    '{
+      model: $model,
+      max_tokens: 1024,
+      messages: [{role: "user", content: $content}]
+    }' | curl -sS --fail-with-body -o "$tmpfile" https://api.anthropic.com/v1/messages \
        --header "x-api-key: $ANTHROPIC_API_KEY" \
        --header "anthropic-version: 2023-06-01" \
        --header "content-type: application/json" \
-       --data \
-  '{
-      "model": "'$model'",
-      "max_tokens": 1024,
-      "messages": [
-          {"role": "user", "content": "'$message'"}
-      ]
-  }'
+       --data-binary @-
 
   if [ $? -ne 0 ]; then
     cat "$tmpfile"
@@ -150,6 +150,7 @@ llm(){
 
   rm -f "$tmpfile"
 }
+
 
 # -----
 # Sound
@@ -262,6 +263,16 @@ gan(){
 gap(){
   gan
   git add -p "$@"
+}
+
+gcm(){
+  local msg=$(make_git_commit_message)
+  __confirm "「$msg」でコミットしますか？" || return
+  git commit -m "$msg"
+}
+
+make_git_commit_message(){
+  git diff --staged | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、詳細は三行目以降に書いてください。それを日本語でコミットメッセージだけを直接出力してください" | llm
 }
 
 grs(){
