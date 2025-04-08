@@ -123,10 +123,11 @@ _rgsed(){
   esac
 }
 
+HAIKU='claude-3-5-haiku-latest'
+SONNET='claude-3-7-sonnet-latest'
 llm(){
-  #local message=$(jq -Rs .)
   local message=$(cat -)
-  local model=${1:-claude-3-5-haiku-latest}
+  local model=${1:-$HAIKU}
   local tmpfile=$(mktemp)
 
   jq -n \
@@ -239,6 +240,7 @@ alias gf='git fetch --all --prune'
 alias ga='git add'
 alias gaa='git add -A'
 alias gc='git commit'
+alias gca='git commit --amend'
 alias gcb='git commit -m backup --no-verify'
 alias gb='git branch'
 alias gd='git diff @'
@@ -266,9 +268,7 @@ gap(){
 }
 
 gcm(){
-  local msg=$(make_git_commit_message)
-  __confirm "「$msg」でコミットしますか？" || return
-  git commit -m "$msg"
+  git commit -m "$(make_git_commit_message)" && git log -n 1
 }
 
 make_git_commit_message(){
@@ -305,6 +305,12 @@ g_save(){
 
 g_pop(){
   git stash pop
+}
+
+g_code_review(){
+  local branch=$1
+  local model=$2 # 空でもOK
+  git log -p remotes/origin/main..remotes/origin/"$branch" | append '上記の内容からコードレビューして' | llm "$model"
 }
 
 # -----
