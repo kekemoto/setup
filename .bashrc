@@ -60,6 +60,10 @@ append(){
   echo $1
 }
 
+stderr(){
+  echo $1 >&2
+}
+
 alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
 alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
 alias color_black="tmux select-pane -P 'bg=black,fg=white'"
@@ -227,6 +231,85 @@ beep_fail(){
 }
 
 # -----
+# Secret Manager
+# -----
+
+export SECRET_DATA_PATH="/home/kekemoto/.secret_data.gpg"
+
+# 標準入力を gpg で暗号化して標準出力する
+# gpg_passphrease : gpg で使うパスワード
+__encrypt(){
+  gpg --batch --passphrase $1 --symmetric
+}
+
+# 標準入力を gpg で復号化して標準出力する
+# gpg_passphrease : gpg で使うパスワード
+__decrypt(){
+  gpg --batch --passphrase $1 --quiet --decrypt
+}
+
+# 標準入力を暗号化して $SECRET_DATA_PATH に出力
+__secret_encrypt(){
+  if [ -z "$GPG_PASSWORD" ]; then
+    stderr "GPG_PASSWORD が設定されてません"
+    return 1
+  fi
+
+  __encrypt $GPG_PASSWORD > $SECRET_DATA_PATH
+}
+
+# $SECRET_DATA_PATH を復号化して標準出力
+__secret_decrypt(){
+  if [ -z "$GPG_PASSWORD" ]; then
+    stderr "GPG_PASSWORD が設定されてません"
+    return 1
+  fi
+  if [ ! -e "$SECRET_DATA_PATH" ]; then
+    stderr "秘密情報がありません"
+    return 1
+  fi
+
+  cat $SECRET_DATA_PATH | __decrypt $GPG_PASSWORD
+}
+
+# 秘密情報を追加
+# key: あとで取り出すためのキー。任意文字列
+# secret: 秘密情報
+secret_add(){
+  if [ "$#" != 2 ]; then
+    stderr "引数の数が合っていません。"
+    return 1
+  fi
+  local key=$1
+  local secret=$2
+
+  if [ ! -e "$SECRET_DATA_PATH" ]; then
+    echo "$key $secret" | __secret_encrypt
+    return 0
+  fi
+
+  local value=$(__secret_decrypt)
+  value+="
+$key $secret"
+  echo "$value" | __secret_encrypt
+}
+
+# 秘密情報を取得
+# key: 欲しい秘密情報のキー
+secret_get(){
+  local key=${1:-default}
+
+  local value=$(__secret_decrypt | awk -v key="$key" '$1 == key {print $2; exit}')
+
+  if [ -z "$value" ]; then
+    stderr "秘密情報が見つかりませんでした。"
+    return 1
+  else
+    echo "$value"
+  fi
+}
+
+# -----
 # Git
 # -----
 
@@ -272,7 +355,7 @@ gcm(){
 }
 
 make_git_commit_message(){
-  git diff --staged | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、詳細は三行目以降に書いてください。それを日本語でコミットメッセージだけを直接出力してください" | llm
+  git diff --staged | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、空行を入れてから詳細を書いてください。それを日本語でコミットメッセージだけを直接出力してください" | llm
 }
 
 grs(){
@@ -363,6 +446,14 @@ fcd(){
     cd $(fd . | fzf --query $1)
   fi
 }
+
+# -----
+# LLM
+# -----
+
+export DEEPSEEK_API_KEY=$(secret_get deepseek)
+export ANTHROPIC_API_KEY=$(secret_get anthropic)
+export OPENAI_API_KEY=$(secret_get openai)
 
 # -----
 # ASDF
