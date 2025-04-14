@@ -448,14 +448,6 @@ fcd(){
 }
 
 # -----
-# LLM
-# -----
-
-export DEEPSEEK_API_KEY=$(secret_get deepseek)
-export ANTHROPIC_API_KEY=$(secret_get anthropic)
-export OPENAI_API_KEY=$(secret_get openai)
-
-# -----
 # ASDF
 # -----
 
@@ -465,6 +457,12 @@ export OPENAI_API_KEY=$(secret_get openai)
 # ローカルの設定ファイル
 # -----
 
-if [ -f ~/.bashrc_local ]; then
-  . ~/.bashrc_local
+BASHRC_LOCAL="$HOME/.bashrc_local"
+if [ -f "$BASHRC_LOCAL" ]; then
+  PERM=$(stat -c "%a" "$BASHRC_LOCAL")
+  if [ "$PERM" = "600" ]; then
+    source "$BASHRC_LOCAL"
+  else
+    stderr "$BASHRC_LOCAL の権限が 600 ではありません"
+  fi
 fi
