@@ -16,7 +16,8 @@ export EDITOR=nvim
 
 alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
 alias bashrc='nvim ~/setup/.bashrc && apply'
-alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
+# alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
+alias bashlo='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
 alias tmuxrc='nvim ~/setup/.tmux.conf && apply'
 alias install='nvim ~/setup/install.sh && apply'
@@ -63,6 +64,59 @@ append(){
 stderr(){
   echo $1 >&2
 }
+
+# ディレクトリを遡ってファイル検索
+find_up() {
+  local file="$1"
+  local dir="$PWD"
+  while [ "$dir" != "/" ]; do
+    if [ -e "$dir/$file" ]; then
+      echo "$dir/$file"
+      return 0
+    fi
+    dir=$(dirname "$dir")
+  done
+  return 1
+}
+
+# 親プロセスのコマンド名
+parent_process_name(){
+  ps -o comm= -p $PPID
+}
+
+# .bashrc_project を読み込む
+load_project() {
+  local path=$(find_up .bashrc_project)
+  if [ -n "$path" ]; then
+    source "$path"
+  fi
+}
+
+PROMPT_COMMAND='load_project'
+
+# .bashrc_project を編集して読み込み
+bashpr() {
+  local path=$(find_up .bashrc_project)
+  if [ -n "$path" ]; then
+    nvim "$path"
+    source "$path"
+  fi
+}
+
+# $1 のファイルが $2 の権限であるかを検証
+# example: is_file_permission path/to/file 600
+is_file_permission(){
+  local path=$1
+  local expect=$2
+  local actual=$(stat -c "%a" "$path")
+  if [ "$expect" = "$actual" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+
 
 alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
 alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
@@ -265,7 +319,11 @@ __secret_decrypt(){
     return 1
   fi
   if [ ! -e "$SECRET_DATA_PATH" ]; then
-    stderr "秘密情報がありません"
+    stderr "秘密情報のファイルがありません"
+    return 1
+  fi
+  if ! is_file_permission "$SECRET_DATA_PATH" 600 ; then
+    stderr "秘密情報のファイルの権限が 600 ではありません"
     return 1
   fi
 
@@ -459,8 +517,7 @@ fcd(){
 
 BASHRC_LOCAL="$HOME/.bashrc_local"
 if [ -f "$BASHRC_LOCAL" ]; then
-  PERM=$(stat -c "%a" "$BASHRC_LOCAL")
-  if [ "$PERM" = "600" ]; then
+  if is_file_permission "$BASHRC_LOCAL" 600 ; then
     source "$BASHRC_LOCAL"
   else
     stderr "$BASHRC_LOCAL の権限が 600 ではありません"
