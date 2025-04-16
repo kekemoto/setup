@@ -65,6 +65,11 @@ stderr(){
   echo $1 >&2
 }
 
+# # 親プロセスのコマンド名
+# parent_process_name(){
+#   ps -o comm= -p $PPID
+# }
+
 # ディレクトリを遡ってファイル検索
 find_up() {
   local file="$1"
@@ -79,11 +84,6 @@ find_up() {
   return 1
 }
 
-# 親プロセスのコマンド名
-parent_process_name(){
-  ps -o comm= -p $PPID
-}
-
 # .bashrc_project を読み込む
 load_project() {
   local path=$(find_up .bashrc_project)
@@ -92,6 +92,7 @@ load_project() {
   fi
 }
 
+# PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
 PROMPT_COMMAND='load_project'
 
 # .bashrc_project を編集して読み込み
