@@ -117,11 +117,24 @@ is_file_permission(){
   fi
 }
 
-
-
+# window の色を変更する
 alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
 alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
 alias color_black="tmux select-pane -P 'bg=black,fg=white'"
+
+# window の色と名前を変更する
+change_window(){
+  eval color_$1
+  tmux rename-window $2
+}
+
+# window の色と名前をローカルの設定にする
+local_window(){
+  color_black
+
+  local name=$(basename $(dirname $(find_up .bashrc_project)))
+  tmux rename-window ${name:-bash}
+}
 
 # -----
 # Command
@@ -132,7 +145,7 @@ yank(){
   if is_wsl; then
     iconv -t cp932 | clip.exe
   else
-    echo "非対応です" >&2
+    stderr "非対応です"
   fi
 }
 
@@ -306,7 +319,7 @@ __decrypt(){
 # 標準入力を暗号化して $SECRET_DATA_PATH に出力
 __secret_encrypt(){
   if [ -z "$GPG_PASSWORD" ]; then
-    stderr "GPG_PASSWORD が設定されてません"
+    stderr "\$GPG_PASSWORD が設定されてません"
     return 1
   fi
 
@@ -316,15 +329,15 @@ __secret_encrypt(){
 # $SECRET_DATA_PATH を復号化して標準出力
 __secret_decrypt(){
   if [ -z "$GPG_PASSWORD" ]; then
-    stderr "GPG_PASSWORD が設定されてません"
+    stderr "\$GPG_PASSWORD が設定されてません"
     return 1
   fi
   if [ ! -e "$SECRET_DATA_PATH" ]; then
-    stderr "秘密情報のファイルがありません"
+    stderr "$SECRET_DATA_PATH にファイルがありません"
     return 1
   fi
   if ! is_file_permission "$SECRET_DATA_PATH" 600 ; then
-    stderr "秘密情報のファイルの権限が 600 ではありません"
+    stderr "$SECRET_DATA_PATH の権限が 600 ではありません"
     return 1
   fi
 
@@ -410,7 +423,7 @@ gap(){
 }
 
 gcm(){
-  git commit -m "$(make_git_commit_message)" && git log -n 1
+  git commit -m "$(make_git_commit_message)" && git commit --amend
 }
 
 make_git_commit_message(){
