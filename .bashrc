@@ -132,8 +132,13 @@ change_window(){
 local_window(){
   color_black
 
-  local name=$(basename $(dirname $(find_up .bashrc_project)))
-  tmux rename-window ${name:-bash}
+  local path=$(find_up .bashrc_project)
+  if [ -n "$path" ]; then
+    local name=$(basename $(dirname $(find_up .bashrc_project)))
+    tmux rename-window "$name"
+  else
+    tmux rename-window bash
+  fi
 }
 
 # -----
