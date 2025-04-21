@@ -128,17 +128,20 @@ change_window(){
   tmux rename-window $2
 }
 
+# プロジェクト名を取得する
+project_name(){
+  local path=$(find_up .bashrc_project)
+  if [ -n "$path" ]; then
+    echo "$(basename $(dirname $(find_up .bashrc_project)))"
+  else
+    echo "home"
+  fi
+}
+
 # window の色と名前をローカルの設定にする
 local_window(){
   color_black
-
-  local path=$(find_up .bashrc_project)
-  if [ -n "$path" ]; then
-    local name=$(basename $(dirname $(find_up .bashrc_project)))
-    tmux rename-window "$name"
-  else
-    tmux rename-window bash
-  fi
+  tmux rename-window "$(project_name)"
 }
 
 # -----
