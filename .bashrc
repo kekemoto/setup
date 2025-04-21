@@ -144,13 +144,19 @@ local_window(){
   tmux rename-window "$(project_name)"
 }
 
-asdf_install(){
+asdf_add(){
   local name=$1
   local version=${2:-latest}
 
   asdf plugin add "$name" \
   && asdf install "$name" "$version" \
   && asdf global "$name" "$version"
+}
+
+asdf_remove(){
+  local name=$1
+  asdf plugin remove "$name"
+  asdf reshim
 }
 
 # 標準出力の内容をクリップボードに
@@ -214,6 +220,8 @@ llm(){
   local message=$(cat -)
   local model=${1:-$HAIKU}
   local tmpfile=$(mktemp)
+
+  ANTHROPIC_API_KEY="$(secret_get anthropic)"
 
   jq -n \
     --arg model "$model" \
@@ -355,6 +363,10 @@ __secret_decrypt(){
   fi
 
   cat $SECRET_DATA_PATH | __decrypt $GPG_PASSWORD
+}
+
+secret_init(){
+  read -s -p "GPG_PASSWORD: " GPG_PASSWORD
 }
 
 # 秘密情報を追加
