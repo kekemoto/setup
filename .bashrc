@@ -148,9 +148,9 @@ asdf_install(){
   local name=$1
   local version=${2:-latest}
 
-  asdf plugin add "$name"
-  asdf install "$name" "$version"
-  asdf global "$name" "$version"
+  asdf plugin add "$name" \
+  && asdf install "$name" "$version" \
+  && asdf global "$name" "$version"
 }
 
 # 標準出力の内容をクリップボードに
