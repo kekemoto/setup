@@ -73,11 +73,6 @@ function! FC() abort
   let @+ = expand("%")
 endfunction
 
-" Go
-autocmd FileType go setlocal noexpandtab
-autocmd FileType go setlocal tabstop=4
-autocmd FileType go setlocal shiftwidth=4
-
 " キーマップ
 let mapleader = "\<Space>"
 
@@ -94,6 +89,7 @@ else
   nnoremap <Leader>s :source ~/.vimrc<CR>
 endif
 if has('nvim')
+  nnoremap gd :lua vim.lsp.buf.definition()<CR>
   nnoremap <Leader>lf :lua vim.lsp.buf.format()<CR>
   nnoremap <Leader>ls :lua vim.lsp.buf.document_symbol()<CR>
   nnoremap <Leader>lr :lua vim.lsp.buf.references()<CR>
@@ -126,6 +122,41 @@ nmap gk gk<SID>g
 nnoremap <script> <SID>gj gj<SID>g
 nnoremap <script> <SID>gk gk<SID>g
 nmap <SID>g <Nop>
+
+
+" PHP
+"
+" install LSP
+"   cd ~/.local/bin/phpactor
+"   curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar -o phpactor
+"   chmod +x phpactor
+"   curl -L https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o phpstan
+"   chmod +x phpstan
+if executable('phpactor')
+  lua <<EOF
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "php",
+      callback = function()
+        vim.lsp.start({
+          name = "phpactor",
+          cmd = { "phpactor", "language-server" },
+          root_dir = vim.fs.root(0, { "composer.json", ".git" }),
+          filetypes = { "php" },
+          init_options = {
+            ["language_server_phpstan.enabled"] = false,
+            ["language_server_psalm.enabled"] = false,
+          },
+        })
+        vim.diagnostic.disable(0)
+      end,
+    })
+EOF
+endif
+
+" Go
+autocmd FileType go setlocal noexpandtab
+autocmd FileType go setlocal tabstop=4
+autocmd FileType go setlocal shiftwidth=4
 
 filetype plugin indent on
 call plug#begin()
