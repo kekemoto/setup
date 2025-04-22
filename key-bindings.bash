@@ -133,7 +133,7 @@ if [[ "${FZF_ALT_C_COMMAND-x}" != "" ]]; then
   bind -m vi-insert '"\ec": "\C-z\ec\C-z"'
 fi
 
-
+# Git で差分があるファイルを一覧し、選択したものをカーソルに挿入する
 fzf_git_status() {
   local selected="$(git status -s | awk '{print $2}' | fzf)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
@@ -142,3 +142,13 @@ fzf_git_status() {
 bind -m emacs-standard -x '"\C-g": fzf_git_status'
 bind -m vi-command -x '"\C-g": fzf_git_status'
 bind -m vi-insert -x '"\C-g": fzf_git_status'
+
+# Git ブランチを一覧し、選択したものをカーソルに挿入する
+fzf_git_branch() {
+  local selected="$(git branch --format='%(refname:short)' | fzf)"
+  READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
+  READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
+}
+bind -m emacs-standard -x '"\C-r": fzf_git_branch'
+bind -m vi-command -x '"\C-r": fzf_git_branch'
+bind -m vi-insert -x '"\C-r": fzf_git_branch'

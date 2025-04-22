@@ -127,7 +127,7 @@ nmap <SID>g <Nop>
 " PHP
 "
 " install LSP
-"   cd ~/.local/bin/phpactor
+"   cd ~/.local/bin
 "   curl -L https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar -o phpactor
 "   chmod +x phpactor
 "   curl -L https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o phpstan
