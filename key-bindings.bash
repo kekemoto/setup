@@ -149,6 +149,6 @@ fzf_git_branch() {
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
 }
-bind -m emacs-standard -x '"\C-r": fzf_git_branch'
-bind -m vi-command -x '"\C-r": fzf_git_branch'
-bind -m vi-insert -x '"\C-r": fzf_git_branch'
+bind -m emacs-standard -x '"\C-i": fzf_git_branch'
+bind -m vi-command -x '"\C-i": fzf_git_branch'
+bind -m vi-insert -x '"\C-i": fzf_git_branch'
