@@ -134,21 +134,33 @@ if [[ "${FZF_ALT_C_COMMAND-x}" != "" ]]; then
 fi
 
 # Git で差分があるファイルを一覧し、選択したものをカーソルに挿入する
-fzf_git_status() {
+__fzf_git_status() {
   local selected="$(git status -s | awk '{print $2}' | fzf)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
 }
-bind -m emacs-standard -x '"\C-g": fzf_git_status'
-bind -m vi-command -x '"\C-g": fzf_git_status'
-bind -m vi-insert -x '"\C-g": fzf_git_status'
 
 # Git ブランチを一覧し、選択したものをカーソルに挿入する
-fzf_git_branch() {
+__fzf_git_branch() {
   local selected="$(git branch --format='%(refname:short)' | fzf)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
 }
-bind -m emacs-standard -x '"\C-i": fzf_git_branch'
-bind -m vi-command -x '"\C-i": fzf_git_branch'
-bind -m vi-insert -x '"\C-i": fzf_git_branch'
+
+# どの一覧を表示するかのメニュー
+__fzf_menu() {
+  local choice=$(printf "branch\nstatus\nhistory\nfile" | fzf --prompt="menu: ")
+  case "$choice" in
+    branch)
+      __fzf_git_branch ;;
+    status)
+      __fzf_git_status ;;
+    history)
+      __fzf_history__ ;;
+    file)
+      fzf-file-widget ;;
+  esac
+}
+bind -m emacs-standard -x '"\C-g": __fzf_menu'
+bind -m vi-command -x '"\C-g": __fzf_menu'
+bind -m vi-insert -x '"\C-g": __fzf_menu'
