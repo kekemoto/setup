@@ -60,7 +60,7 @@ fi
 # install asdf
 if ! command -v asdf >/dev/null; then
   cd $HOME
-  ([ -e "$HOME/.asdf" ] || git clone https://github.com/asdf-vm/asdf.git .asdf)
+  ([ -e "$HOME/.asdf" ] || git clone https://github.com/asdf-vm/asdf.git --branch 'v0.15.0' .asdf)
   . "$HOME/.asdf/asdf.sh"
 fi
 
