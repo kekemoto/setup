@@ -19,16 +19,19 @@ alias bashrc='nvim ~/setup/.bashrc && apply'
 # alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias bashlo='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
-alias tmuxrc='nvim ~/setup/.tmux.conf && apply'
 alias install='nvim ~/setup/install.sh && apply'
 
 alias ls='ls -a'
 alias ll='ls -al'
-alias setup='cd ~/setup'
 
 # -----
 # Helper
 # -----
+
+setup(){
+  cd ~/setup
+  local_window
+}
 
 __confirm(){
   echo -n "$1 (y/N) : "
@@ -84,17 +87,6 @@ find_up() {
   return 1
 }
 
-# .bashrc_project を読み込む
-load_project() {
-  local path=$(find_up .bashrc_project)
-  if [ -n "$path" ]; then
-    source "$path"
-  fi
-}
-
-# PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
-PROMPT_COMMAND='load_project'
-
 # .bashrc_project を編集して読み込み
 bashpr() {
   local path=$(find_up .bashrc_project)
@@ -115,33 +107,6 @@ is_file_permission(){
   else
     return 1
   fi
-}
-
-# window の色を変更する
-alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
-alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
-alias color_black="tmux select-pane -P 'bg=black,fg=white'"
-
-# window の色と名前を変更する
-change_window(){
-  eval color_$1
-  tmux rename-window $2
-}
-
-# プロジェクト名を取得する
-project_name(){
-  local path=$(find_up .bashrc_project)
-  if [ -n "$path" ]; then
-    echo "$(basename $(dirname $(find_up .bashrc_project)))"
-  else
-    echo "home"
-  fi
-}
-
-# window の色と名前をローカルの設定にする
-local_window(){
-  color_black
-  tmux rename-window "$(project_name)"
 }
 
 asdf_add(){
@@ -245,6 +210,53 @@ llm(){
   rm -f "$tmpfile"
 }
 
+# -----
+# tmux
+# -----
+
+alias tmuxrc='nvim ~/setup/.tmux.conf && apply'
+
+# window の色を変更する
+alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
+alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
+alias color_black="tmux select-pane -P 'bg=black,fg=white'"
+
+# window の色と名前を変更する
+change_window(){
+  eval color_$1
+  tmux rename-window $2
+}
+
+# -----
+# プロジェクト管理
+# -----
+
+# プロジェクト名を取得する
+project_name(){
+  local path=$(find_up .bashrc_project)
+  if [ -n "$path" ]; then
+    echo "$(basename $(dirname $(find_up .bashrc_project)))"
+  else
+    echo "home"
+  fi
+}
+
+# window の色と名前をローカルの設定にする
+local_window(){
+  color_black
+  tmux rename-window "$(project_name)"
+}
+
+# .bashrc_project を読み込む
+load_project() {
+  local path=$(find_up .bashrc_project)
+  if [ -n "$path" ]; then
+    source "$path"
+  fi
+}
+
+# PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
+PROMPT_COMMAND='load_project'
 
 # -----
 # Sound
@@ -480,7 +492,7 @@ g_rebase(){
 }
 
 g_save(){
-  git stash save -u
+  git stash push -u
 }
 
 g_pop(){
@@ -493,6 +505,13 @@ g_code_review(){
   git log -p remotes/origin/main..remotes/origin/"$branch" | append '上記の内容からコードレビューして' | llm "$model"
 }
 
+g_branch_all_delete(){
+  local branch=${1:-main}
+  git switch main \
+  && gpull \
+  && git branch | map git branch -d
+}
+
 # -----
 # Docker
 # -----
@@ -502,7 +521,8 @@ alias dc="docker container"
 alias dl="docker logs -f"
 alias dv="docker volume"
 alias dr="docker restart -t 5"
-alias dcu="docker compose up -d && dcl"
+alias dcu="docker compose up -d"
+alias dcul="dcu && dcl"
 alias dcs="docker compose stop"
 alias dcd="docker compose down -t 5"
 alias dcl="docker compose logs -f"
