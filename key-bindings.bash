@@ -148,19 +148,23 @@ __fzf_git_branch() {
 }
 
 # どの一覧を表示するかのメニュー
-__fzf_menu() {
-  local choice=$(printf "branch\nstatus\nhistory\nfile" | fzf --prompt="menu: ")
-  case "$choice" in
-    branch)
-      __fzf_git_branch ;;
-    status)
-      __fzf_git_status ;;
-    history)
-      __fzf_history__ ;;
-    file)
-      fzf-file-widget ;;
-  esac
+# __fzf_menu() {
+#   local choice=$(printf "branch\nstatus\nhistory\nfile" | fzf --prompt="menu: ")
+#   case "$choice" in
+#     branch)
+#       __fzf_git_branch ;;
+#     status)
+#       __fzf_git_status ;;
+#     history)
+#       __fzf_history__ ;;
+#     file)
+#       fzf-file-widget ;;
+#   esac
+# }
+
+__fzf_all_command(){
+  eval $({ alias | cut -d= -f1 | sed "s/^alias //"; declare -F | awk '{print $3}'; } | fzf)
 }
-bind -m emacs-standard -x '"\C-g": __fzf_menu'
-bind -m vi-command -x '"\C-g": __fzf_menu'
-bind -m vi-insert -x '"\C-g": __fzf_menu'
+bind -m emacs-standard -x '"\C-g": __fzf_all_command'
+bind -m vi-command -x '"\C-g": __fzf_all_command'
+bind -m vi-insert -x '"\C-g": __fzf_all_command'

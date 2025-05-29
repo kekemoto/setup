@@ -210,6 +210,14 @@ llm(){
   rm -f "$tmpfile"
 }
 
+__all_alias_and_function(){
+  { alias | cut -d= -f1 | sed "s/^alias //"; declare -F | awk '{print $3}'; }
+}
+
+a(){
+  eval $(__all_alias_and_function | fzf)
+}
+
 # -----
 # tmux
 # -----
@@ -510,6 +518,52 @@ g_branch_all_delete(){
   git switch main \
   && gpull \
   && git branch | map git branch -d
+}
+
+g_project_switch() {
+  local project_name="${1:-}"
+  local base_dir="$HOME/work/dev"
+
+  if [[ -z "$project_name" ]]; then
+    stderr "Usage: cl_switch <project_name>"
+    stderr "Example: cl_switch myapp"
+    stderr "         (clones current repo to ~/dev/myapp and switches to it)"
+    return 1
+  fi
+
+  local old_project_dir=$(pwd)
+
+  # カレントディレクトリからリモートURLを取得
+  local repo_url=$(git remote get-url origin 2>/dev/null)
+  if [[ -z "$repo_url" ]]; then
+    stderr "Error: Current directory is not a git repository with origin remote."
+    return 1
+  fi
+
+  # プロジェクトディレクトリが存在しない場合はクローンする
+  local project_dir="$base_dir/$project_name"
+  if [[ ! -d "$project_dir" ]]; then
+    mkdir -p "$base_dir"
+    git clone "$repo_url" "$project_dir" || return 1
+  fi
+
+  cd "$project_dir" || return 1
+
+  if [ "$repo_url" != "$(git remote get-url origin 2>/dev/null)" ]; then
+    stderr "Error: リポジトリが一致しませんでした。別リポジトリのブランチ名と衝突した可能性があります"
+    return 1
+  fi
+  
+  # ブランチが存在するかチェック
+  if git show-ref --verify --quiet "refs/heads/$project_name"; then
+    git switch "$project_name"
+  else
+    git switch -c "$project_name"
+  fi
+
+  if [ -e "$old_project_dir/CLAUDE.md" ]; then
+    ln -s "$old_project_dir/CLAUDE.md" "$project_dir/CLAUDE.md"
+  fi
 }
 
 # -----
