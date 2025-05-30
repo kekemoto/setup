@@ -55,6 +55,17 @@ map(){
     done
 }
 
+# {} の位置に標準入力の内容を挿入できる map
+# SYMBOL 環境変数で {} を変更可能
+each(){
+  while read LINE
+  do
+    local template="$*" # 引数を1つの文字列に結合（空白区切り）
+    local cmd=$(echo "$template" | sed "s/${SYMBOL:-"{}"}/$LINE/g")
+    eval "$cmd"
+  done
+}
+
 is_wsl(){
   command -v powershell.exe >/dev/null
 }
@@ -521,7 +532,7 @@ g_branch_all_delete(){
 }
 
 g_project_switch() {
-  local project_name="${1:-}"
+  local project_name="${1//\//_}"
   local base_dir="$HOME/work/dev"
 
   if [[ -z "$project_name" ]]; then
@@ -540,11 +551,11 @@ g_project_switch() {
     return 1
   fi
 
-  # プロジェクトディレクトリが存在しない場合はクローンする
+  # プロジェクトディレクトリが存在しない場合はコピーする
   local project_dir="$base_dir/$project_name"
   if [[ ! -d "$project_dir" ]]; then
     mkdir -p "$base_dir"
-    git clone "$repo_url" "$project_dir" || return 1
+    cp -R "$old_project_dir" "$project_dir"
   fi
 
   cd "$project_dir" || return 1
@@ -559,10 +570,6 @@ g_project_switch() {
     git switch "$project_name"
   else
     git switch -c "$project_name"
-  fi
-
-  if [ -e "$old_project_dir/CLAUDE.md" ]; then
-    ln -s "$old_project_dir/CLAUDE.md" "$project_dir/CLAUDE.md"
   fi
 }
 

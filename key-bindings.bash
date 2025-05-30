@@ -161,10 +161,41 @@ __fzf_git_branch() {
 #       fzf-file-widget ;;
 #   esac
 # }
+__fzf_menu() {
+  tput smcup # 仮想画面を表示
+  tput cup $(( $(tput lines) - 1 )) 0 # カーソルを最下部に移動
 
-__fzf_all_command(){
-  eval $({ alias | cut -d= -f1 | sed "s/^alias //"; declare -F | awk '{print $3}'; } | fzf)
+  cat << EOF
+b --- git branch
+s --- git status
+h --- history
+f --- directory
+EOF
+
+  read -rsn1 key
+
+  tput rmcup # 仮想画面を削除
+
+  case "$key" in
+    b)
+      __fzf_git_branch ;;
+    s)
+      __fzf_git_status ;;
+    h)
+      __fzf_history__ ;;
+    f)
+      fzf-file-widget ;;
+    *)
+      echo -e "\nUnknown command: $key" ;;
+  esac
 }
-bind -m emacs-standard -x '"\C-g": __fzf_all_command'
-bind -m vi-command -x '"\C-g": __fzf_all_command'
-bind -m vi-insert -x '"\C-g": __fzf_all_command'
+bind -m emacs-standard -x '"\C-g": __fzf_menu'
+bind -m vi-command -x '"\C-g": __fzf_menu'
+bind -m vi-insert -x '"\C-g": __fzf_menu'
+
+# __fzf_all_command(){
+#   eval $({ alias | cut -d= -f1 | sed "s/^alias //"; declare -F | awk '{print $3}'; } | fzf)
+# }
+# bind -m emacs-standard -x '"\C-g": __fzf_all_command'
+# bind -m vi-command -x '"\C-g": __fzf_all_command'
+# bind -m vi-insert -x '"\C-g": __fzf_all_command'
