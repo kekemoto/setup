@@ -158,6 +158,28 @@ autocmd FileType go setlocal noexpandtab
 autocmd FileType go setlocal tabstop=4
 autocmd FileType go setlocal shiftwidth=4
 
+" Zig
+"
+" install LSP
+"   asdf plugin add zls
+"   asdf install zls 0.14.0
+"   asdf global zls 0.14.0
+if executable('zls')
+  lua <<EOF
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "zig",
+      callback = function()
+        vim.lsp.start({
+          name = "zls",
+          cmd = { "zls" },
+          root_dir = vim.fs.root(0, { "build.zig", ".git" }),
+          filetypes = { "zig" },
+        })
+      end,
+    })
+EOF
+endif
+
 filetype plugin indent on
 call plug#begin()
 " 補完

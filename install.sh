@@ -75,6 +75,8 @@ install_asdf_plugin fd 9.0.0 https://gitlab.com/wt0f/asdf-fd.git
 install_asdf_plugin rg 14.1.0 https://gitlab.com/wt0f/asdf-ripgrep.git
 # install_asdf_plugin redis-cli 7.4.0   https://github.com/NeoHsu/asdf-redis-cli.git
 # install_asdf_plugin mysql     8.0.33  https://github.com/iroddis/asdf-mysql.git
+# install_asdf_plugin zig       0.14.0  https://github.com/cheetah/asdf-zig.git
+# install_asdf_plugin zls       0.14.0  https://github.com/m1ome/asdf-zls
 
 if command -v pip >/dev/null; then
 	if ! command -v mycli >/dev/null; then

@@ -133,43 +133,41 @@ if [[ "${FZF_ALT_C_COMMAND-x}" != "" ]]; then
 fi
 
 # Git で差分があるファイルを一覧し、選択したものをカーソルに挿入する
-__fzf_git_status() {
+__git_status_fzf() {
 	local selected="$(git status -s | awk '{print $2}' | fzf)"
 	READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
 	READLINE_POINT=$((READLINE_POINT + ${#selected}))
 }
 
 # Git ブランチを一覧し、選択したものをカーソルに挿入する
-__fzf_git_branch() {
+__git_branch_fzf() {
 	local selected="$(git branch --format='%(refname:short)' | fzf)"
 	READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
 	READLINE_POINT=$((READLINE_POINT + ${#selected}))
 }
 
-# どの一覧を表示するかのメニュー
-# __fzf_menu() {
-#   local choice=$(printf "branch\nstatus\nhistory\nfile" | fzf --prompt="menu: ")
-#   case "$choice" in
-#     branch)
-#       __fzf_git_branch ;;
-#     status)
-#       __fzf_git_status ;;
-#     history)
-#       __fzf_history__ ;;
-#     file)
-#       fzf-file-widget ;;
-#   esac
-# }
+# エイリアスと関数を一覧にし、選択したものをカーソルに挿入する
+__all_commands_fzf() {
+	local selected=$({
+		alias | cut -d= -f1 | sed "s/^alias //"
+		declare -F | awk '{print $3}'
+	} | fzf)
+	READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
+	READLINE_POINT=$((READLINE_POINT + ${#selected}))
+}
+bind -m emacs-standard -x '"\C-f": __all_commands_fzf'
+bind -m vi-command -x '"\C-f": __all_commands_fzf'
+bind -m vi-insert -x '"\C-f": __all_commands_fzf'
+
 __fzf_menu() {
 	tput smcup                        # 仮想画面を表示
 	tput cup $(($(tput lines) - 1)) 0 # カーソルを最下部に移動
 
-	cat <<EOF
-b --- git branch
-s --- git status
-h --- history
-f --- directory
-EOF
+	echo b --- git branch
+	echo s --- git status
+	echo h --- history
+	echo f --- files
+	echo c --- commands
 
 	read -rsn1 key
 
@@ -177,16 +175,19 @@ EOF
 
 	case "$key" in
 	b)
-		__fzf_git_branch
+		__git_branch_fzf
 		;;
 	s)
-		__fzf_git_status
+		__git_status_fzf
 		;;
 	h)
 		__fzf_history__
 		;;
 	f)
 		fzf-file-widget
+		;;
+	c)
+		__all_commands_fzf
 		;;
 	*)
 		echo -e "\nUnknown command: $key"
@@ -196,10 +197,3 @@ EOF
 bind -m emacs-standard -x '"\C-g": __fzf_menu'
 bind -m vi-command -x '"\C-g": __fzf_menu'
 bind -m vi-insert -x '"\C-g": __fzf_menu'
-
-# __fzf_all_command(){
-#   eval $({ alias | cut -d= -f1 | sed "s/^alias //"; declare -F | awk '{print $3}'; } | fzf)
-# }
-# bind -m emacs-standard -x '"\C-g": __fzf_all_command'
-# bind -m vi-command -x '"\C-g": __fzf_all_command'
-# bind -m vi-insert -x '"\C-g": __fzf_all_command'

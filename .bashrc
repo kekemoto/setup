@@ -2,27 +2,27 @@ export HISTSIZE=10000
 export HISTFILESIZE=10000
 export HISTCONTROL=ignoredups:ignorespace
 
-export PS1="\n\u@\h \D{%F %T} \w\n\$ "
-export EDITOR=nvim
+export COLOR_RED="\e[31m"
+export COLOR_GREEN="\e[32m"
+export COLOR_YELLOW="\e[33m"
+export COLOR_END="\e[m"
 
-# export COLOR_RED="\e[31m"
-# export COLOR_GREEN="\e[32m"
-# export COLOR_YELLOW="\e[33m"
-# export COLOR_END="\e[m"
+export PS1="\n\u@\h \D{%F %T} $COLOR_GREEN$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')$COLOR_END \w\n\$ "
+export EDITOR=nvim
 
 # -----
 # Alias
 # -----
 
 alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
-alias bashrc='nvim ~/setup/.bashrc && apply'
-# alias blocal='nvim ~/.bashrc_local && . ~/.bashrc_local'
+alias bashrc='nvim ~/setup/.bashrc && apply && setup_fmt'
 alias bashlo='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
 alias install='nvim ~/setup/install.sh && apply'
 
 alias ls='ls -a'
-alias ll='ls -al'
+alias ll='ls -alF --color=auto'
+# alias zip='paste'
 
 # -----
 # Helper
@@ -34,7 +34,9 @@ setup() {
 }
 
 setup_fmt() {
-	shfmt -w ~/setup/**/*.sh
+	if command -v shfmt >/dev/null; then
+		shfmt -w ~/setup/**/*.sh
+	fi
 }
 
 __confirm() {
@@ -191,9 +193,13 @@ _rgsed() {
 	esac
 }
 
+# -----
+# llm
+# -----
+
 HAIKU='claude-3-5-haiku-latest'
 SONNET='claude-3-7-sonnet-latest'
-llm() {
+anthropic_cli() {
 	local message=$(cat -)
 	local model=${1:-$HAIKU}
 	local tmpfile=$(mktemp)
@@ -222,16 +228,19 @@ llm() {
 	rm -f "$tmpfile"
 }
 
-__all_alias_and_function() {
-	{
-		alias | cut -d= -f1 | sed "s/^alias //"
-		declare -F | awk '{print $3}'
-	}
-}
+if command -v ollama >/dev/null; then
+	# ollama サーバーが起動してなかったら起動する
+	pgrep -f "ollama serve" > /dev/null || { nohup ollama serve > ~/ollama.log 2>&1 & }
 
-a() {
-	eval $(__all_alias_and_function | fzf)
-}
+	alias ollama_log="less ~/ollama.log"
+
+	ollama_cli(){
+		local model=${1:-'gemma3:4b'}
+		cat | ollama run $model
+	}
+fi
+
+alias llm="anthropic_cli"
 
 # -----
 # tmux
@@ -248,6 +257,13 @@ alias color_black="tmux select-pane -P 'bg=black,fg=white'"
 change_window() {
 	eval color_$1
 	tmux rename-window $2
+}
+
+tmux_split() {
+	tmux split-window -h \; \
+		split-window -v \; \
+		select-pane -t 0 \; \
+		split-window -v
 }
 
 # -----
@@ -458,6 +474,7 @@ alias gc='git commit'
 alias gca='git commit --amend'
 alias gcb='git commit -m backup --no-verify'
 alias gb='git branch'
+alias gbr='git for-each-ref --format="%(refname:short) %(upstream:short)" refs/heads/ | column -t'
 alias gd='git diff @'
 alias gd1='git diff @~ @'
 
@@ -628,13 +645,18 @@ fcd() {
 		cd $(fd . | fzf --query $1)
 	fi
 }
+# -----
+# asdf
+# -----
+
+. "$HOME/.asdf/asdf.sh"
+
+# asdf_add shfmt
+# asdf_add redis-cli
 
 # -----
 # その他設定
 # -----
-
-# asdf を有効化する
-. "$HOME/.asdf/asdf.sh"
 
 # ** のグロブ展開を可能にする
 shopt -s globstar
