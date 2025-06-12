@@ -7,8 +7,20 @@ export COLOR_GREEN="\e[32m"
 export COLOR_YELLOW="\e[33m"
 export COLOR_END="\e[m"
 
-export PS1="\n\u@\h \D{%F %T} $COLOR_GREEN$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')$COLOR_END \w\n\$ "
 export EDITOR=nvim
+
+# -----
+# Prompt
+# -----
+
+__prompt_git_branch_name(){
+	local branch=$(git branch --show-current 2>/dev/null)
+	if [ -n "$branch" ]; then
+		echo " $branch"
+	fi
+}
+
+export PS1="\n\u@\h \D{%F %T}\[\033[32m\]\$(__prompt_git_branch_name)\[\033[0m\] \w\n\$ "
 
 # -----
 # Alias
