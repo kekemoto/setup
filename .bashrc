@@ -66,6 +66,15 @@ __confirm() {
 	esac
 }
 
+
+# 空行を出力するだけ。画面を区切りたい時に
+blank(){
+  local count=${1:-40}  # 引数がなければデフォルト10回
+  for i in $(seq 1 "$count"); do
+    echo ""
+  done
+}
+
 map() {
 	while read LINE; do
 		"$@" $LINE
@@ -203,6 +212,10 @@ _rgsed() {
 		_rgsed $line
 		;;
 	esac
+}
+
+vrg() {
+	rg "$@" -l | xargs nvim +"/$1" -p
 }
 
 # -----
@@ -536,11 +549,12 @@ gpull() {
 }
 
 g_rebase() {
+	local branch=${1:-main}
 	local now=$(git branch --show-current)
-	git switch main &&
+	git switch $branch &&
 		gpull &&
 		git switch $now &&
-		git rebase main
+		git rebase $branch
 }
 
 g_save() {

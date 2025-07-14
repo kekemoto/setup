@@ -125,8 +125,9 @@ git config --global --add --bool push.autoSetupRemote true
 # git diff-highlight
 if ! command -v diff-highlight >/dev/null; then
 	if [ -e /usr/share/doc/git/contrib/diff-highlight/diff-highlight ]; then
-		sudo ln -s /usr/share/doc/git/contrib/diff-highlight/diff-highlight /usr/local/bin/diff-highlight
-		sudo chmod +x /usr/local/bin/diff-highlight
+		mkdir -p $HOME/.local/bin
+		sudo cp /usr/share/doc/git/contrib/diff-highlight/diff-highlight $HOME/.local/bin/diff-highlight
+		sudo chmod +x $HOME/.local/bin/diff-highlight
 
 		git config --global pager.log "diff-highlight | less"
 		git config --global pager.show "diff-highlight | less"
