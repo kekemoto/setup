@@ -65,7 +65,7 @@ fi
 
 # intall asdf plugin
 . "$HOME/.asdf/asdf.sh"
-install_asdf_plugin python 3.12.2 https://github.com/danhper/asdf-python.git
+install_asdf_plugin python 3.13.5 https://github.com/danhper/asdf-python.git
 install_asdf_plugin nvim 0.10.0 https://github.com/richin13/asdf-neovim.git
 install_asdf_plugin tmux 3.4 https://github.com/aphecetche/asdf-tmux.git
 install_asdf_plugin node 23.11.0 https://github.com/asdf-vm/asdf-nodejs.git

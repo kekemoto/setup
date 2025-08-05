@@ -32,8 +32,8 @@ alias bashlo='nvim ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
 alias install='nvim ~/setup/install.sh && apply'
 
-alias ls='ls -a'
-alias ll='ls -alF --color=auto'
+alias ls='ls -a --color=auto'
+alias ll='ls -alhF --color=auto'
 # alias zip='paste'
 
 # -----
