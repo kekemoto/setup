@@ -171,8 +171,18 @@ yank() {
 
 # rg で検索し、置換する
 rgsed() {
-	read -p "検索クエリを入力してください: " query
-	read -p "置換する文字列を入力してください: " replace
+	local query=$1
+	local replace=$2
+
+	if [ -z "$query" ]; then
+		stderr "検索文字列が設定されてません"
+		return 1
+	fi
+	if [ -z "$replace" ]; then
+		stderr "置換文字列が設定されてません"
+		return 1
+	fi
+
 	mapfile -t results < <(rg --vimgrep "$query")
 	for line in "${results[@]}"; do
 		_rgsed $line
@@ -573,7 +583,7 @@ g_code_review() {
 
 g_branch_all_delete() {
 	local branch=${1:-main}
-	git switch main &&
+	git switch $branch &&
 		gpull &&
 		git branch | map git branch -d
 }
