@@ -5,6 +5,7 @@ export HISTCONTROL=ignoredups:ignorespace
 export COLOR_RED="\e[31m"
 export COLOR_GREEN="\e[32m"
 export COLOR_YELLOW="\e[33m"
+export COLOR_BLUE="\e[34m"
 export COLOR_END="\e[m"
 
 export EDITOR=nvim
@@ -20,7 +21,7 @@ __prompt_git_branch_name(){
 	fi
 }
 
-export PS1="\n\u@\h \D{%F %T}\[\033[32m\]\$(__prompt_git_branch_name)\[\033[0m\] \w\n\$ "
+export PS1="\n\u@\[\033[32m\]\h\[\033[0m\] \D{%F %T}\[\033[33m\]\$(__prompt_git_branch_name)\[\033[0m\] \w\n\$ "
 
 # -----
 # Alias
