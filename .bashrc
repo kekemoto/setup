@@ -43,7 +43,6 @@ alias ll='ls -alhF --color=auto'
 
 setup() {
 	cd ~/setup
-	local_window
 }
 
 setup_fmt() {
@@ -285,9 +284,9 @@ alias llm="anthropic_cli"
 alias tmuxrc='nvim ~/setup/.tmux.conf && apply'
 
 # window の色を変更する
-alias color_red="tmux select-pane -P 'bg=#350000,fg=white'"
-alias color_green="tmux select-pane -P 'bg=#003500,fg=white'"
-alias color_black="tmux select-pane -P 'bg=black,fg=white'"
+alias color_red='[ -n "$TMUX" ] && tmux select-pane -P "bg=#350000,fg=white"'
+alias color_green='[ -n "$TMUX" ] && tmux select-pane -P "bg=#003500,fg=white"'
+alias color_black='[ -n "$TMUX" ] && tmux select-pane -P "bg=black,fg=white"'
 
 # window の色と名前を変更する
 change_window() {
@@ -319,7 +318,7 @@ project_name() {
 # window の色と名前をローカルの設定にする
 local_window() {
 	color_black
-	tmux rename-window "$(project_name)"
+	[ -n "$TMUX" ] && tmux rename-window "$(project_name)"
 }
 
 # .bashrc_project を読み込む
@@ -331,7 +330,7 @@ load_project() {
 }
 
 # PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
-PROMPT_COMMAND='load_project'
+PROMPT_COMMAND='load_project; local_window'
 
 # -----
 # Sound
@@ -508,12 +507,12 @@ alias ga='git add'
 alias gaa='git add -A'
 alias gc='git commit'
 alias gca='git commit --amend'
-alias gcb='git commit -m backup --no-verify'
 alias gb='git branch'
 alias gbr='git for-each-ref --format="%(refname:short) %(upstream:short)" refs/heads/ | column -t'
 alias gd='git diff @'
 alias gd1='git diff @~ @'
 
+# git log
 gl() {
 	local num
 	if [ -z $1 ]; then
@@ -525,16 +524,28 @@ gl() {
 	git log --reverse -n $num
 }
 
+# git add -N
 gan() {
 	# git ls-files --others --exclude-standard -z | xargs -0 git add -N
 	git add -AN
 }
 
+# git add -p
 gap() {
 	gan
 	git add -p "$@"
 }
 
+# git commit backup
+gcb() {
+	local msg='backup'
+	if [ ! -z $1 ]; then
+		msg="$msg: $1"
+	fi
+	git commit -m "$msg" --no-verify
+}
+
+# git commit message
 gcm() {
 	git commit -m "$(make_git_commit_message)" && git commit --amend
 }
@@ -543,11 +554,25 @@ make_git_commit_message() {
 	git diff --staged | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、空行を入れてから詳細を書いてください。それを日本語でコミットメッセージだけを直接出力してください" | llm
 }
 
+# git switch
+gsw() {
+	git switch $(git branch --format='%(refname:short)' | fzf --query "$1" --select-1)
+}
+alias sw=gsw
+
+# git switch -c
+gsc() {
+	git switch -c "$@"
+}
+alias swc=gsc
+
+# git reset --soft
 grs() {
 	__confirm "git reset --soft を実行しますか？" &&
 		git reset --soft HEAD~
 }
 
+# git reset --hard
 grh() {
 	__confirm "git reset --hard を実行しますか？" &&
 		git add -A &&
@@ -574,6 +599,14 @@ g_save() {
 
 g_pop() {
 	git stash pop
+}
+
+g_diff_menu() {
+	local params="$1"
+	git diff "$params" $(git diff "$params" --name-only | fzf)
+}
+gdm(){
+	g_diff_menu @~ @
 }
 
 g_code_review() {
@@ -682,6 +715,17 @@ fcd() {
 		cd $(fd . | fzf --query $1)
 	fi
 }
+
+# fzf git status
+fgs() {
+	git status -s | awk '{print $2}' | fzf
+}
+
+# fzf git branch
+fgb() {
+	git branch --format='%(refname:short)' | fzf
+}
+
 # -----
 # asdf
 # -----

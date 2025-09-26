@@ -145,6 +145,9 @@ __git_branch_fzf() {
 	READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
 	READLINE_POINT=$((READLINE_POINT + ${#selected}))
 }
+bind -m emacs-standard -x '"\C-g": __git_branch_fzf'
+bind -m vi-command -x '"\C-g": __git_branch_fzf'
+bind -m vi-insert -x '"\C-g": __git_branch_fzf'
 
 # エイリアスと関数を一覧にし、選択したものをカーソルに挿入する
 __all_commands_fzf() {
@@ -155,9 +158,6 @@ __all_commands_fzf() {
 	READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
 	READLINE_POINT=$((READLINE_POINT + ${#selected}))
 }
-bind -m emacs-standard -x '"\C-f": __all_commands_fzf'
-bind -m vi-command -x '"\C-f": __all_commands_fzf'
-bind -m vi-insert -x '"\C-f": __all_commands_fzf'
 
 __fzf_menu() {
 	tput smcup                        # 仮想画面を表示
@@ -194,6 +194,6 @@ __fzf_menu() {
 		;;
 	esac
 }
-bind -m emacs-standard -x '"\C-g": __fzf_menu'
-bind -m vi-command -x '"\C-g": __fzf_menu'
-bind -m vi-insert -x '"\C-g": __fzf_menu'
+# bind -m emacs-standard -x '"\C-g": __fzf_menu'
+# bind -m vi-command -x '"\C-g": __fzf_menu'
+# bind -m vi-insert -x '"\C-g": __fzf_menu'
