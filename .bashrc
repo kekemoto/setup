@@ -37,6 +37,9 @@ alias ls='ls -a --color=auto'
 alias ll='ls -alhF --color=auto'
 # alias zip='paste'
 
+alias sudoer='~/setup/bin/sudoer'
+alias ssher='~/setup/bin/ssher'
+
 # -----
 # Helper
 # -----
@@ -228,6 +231,10 @@ vrg() {
 	rg "$@" -l | xargs nvim +"/$1" -p
 }
 
+check_my_ip() {
+	curl http://checkip.amazonaws.com
+}
+
 # -----
 # llm
 # -----
@@ -353,14 +360,23 @@ beep() {
 	fi
 }
 
-beep_beep() {
+# simple sound
+beep_success() {
 	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local do="[console]::beep(440,500);"  # ド
-	local re="[console]::beep(494,500);"  # レ
-	local mi="[console]::beep(554,500);"  # ミ
-	powershell.exe -Command $lag$mi$re$do
+	local fa="[console]::beep(587,100);"  # ファ
+	local si="[console]::beep(831,100);"  # シ
+	powershell.exe -Command $lag$fa$si$si
 }
 
+# simple sound
+beep_fail() {
+	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
+	local do="[console]::beep(440,100);"  # ド
+	local fa="[console]::beep(587,100);"  # ファ
+	powershell.exe -Command $lag$fa$do$do
+}
+
+# ゼルダの伝説
 beep_good() {
 	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
 	local do="[console]::beep(440,100);"  # ド
@@ -387,22 +403,6 @@ beep_bad() {
 	local ra="[console]::beep(740,100);"  # ラ
 	local si="[console]::beep(831,100);"  # シ
 	powershell.exe -Command $lag$si$fa$fa$fa$mi$re$do
-}
-
-# simple sound
-beep_success() {
-	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local fa="[console]::beep(587,100);"  # ファ
-	local si="[console]::beep(831,100);"  # シ
-	powershell.exe -Command $lag$fa$si$si
-}
-
-# simple sound
-beep_fail() {
-	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local do="[console]::beep(440,100);"  # ド
-	local fa="[console]::beep(587,100);"  # ファ
-	powershell.exe -Command $lag$fa$do$do
 }
 
 # -----
@@ -601,12 +601,9 @@ g_pop() {
 	git stash pop
 }
 
-g_diff_menu() {
-	local params="$1"
-	git diff "$params" $(git diff "$params" --name-only | fzf)
-}
+# git diff merge
 gdm(){
-	g_diff_menu @~ @
+	git diff @...$(fgb)
 }
 
 g_code_review() {
@@ -718,12 +715,12 @@ fcd() {
 
 # fzf git status
 fgs() {
-	git status -s | awk '{print $2}' | fzf
+	git status -s | awk '{print $2}' | fzf --query "$1" --select-1
 }
 
 # fzf git branch
 fgb() {
-	git branch --format='%(refname:short)' | fzf
+	git branch --format='%(refname:short)' | fzf --query "$1" --select-1
 }
 
 # -----

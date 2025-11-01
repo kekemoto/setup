@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+#
+# ssher - 複数ホストに同じコマンドを順次実行する
+#
+# 使い方:
+#   ssher -c "実行コマンド" -h "ホストリスト"
+#   ssher -c "実行コマンド" -h /path/to/hosts.txt
+#
+# 引数:
+#   -c : 各ホストで実行するコマンド（必須）
+#   -h : 接続先ホストリスト（必須）
+#        ・1行1ホストのファイルパス
+#        ・またはスペース／改行区切りのホスト名文字列
+#
+# 例:
+#   ssher -c "uptime" -h "./hosts.txt"
+#   ssher -c "hostname" -h "web001 web002 web003"
+#   ssher -c "df -h" -h $'web001\nweb002\nweb003'
+#
+# 注意:
+#   - 両方の引数 (-c, -h) は必須。
+#   - 空行は無視されます。
+#   - 実行順はシーケンシャル（順次実行）。
+#
+
+set -euo pipefail
+
+cmd=""
+hosts_input=""
+tty=""
+
+# --- 引数のパース ---
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-c)
+		cmd="$2"
+		shift 2
+		;;
+	-h)
+		hosts_input="$2"
+		shift 2
+		;;
+	-t)
+		tty="-t"
+		shift 1
+		;;
+	*)
+		echo "不明な引数: $1" >&2
+		exit 1
+		;;
+	esac
+done
+
+# --- 必須チェック ---
+if [[ -z "$cmd" ]]; then
+	echo "エラー: -c で実行コマンドを指定してください" >&2
+	exit 1
+fi
+
+if [[ -z "$hosts_input" ]]; then
+	echo "エラー: -h で接続先を指定してください（ファイルパスまたはスペース/改行区切りのホスト名）" >&2
+	exit 1
+fi
+
+# --- ホストリストの解決 ---
+hosts=()
+if [[ -f "$hosts_input" ]]; then
+	# ファイルの場合
+	mapfile -t hosts < <(grep -v '^[[:space:]]*$' "$hosts_input")
+else
+	# 文字列の場合（スペース・改行どちらでもOK）
+	IFS=' ' read -r -a hosts <<<"$(echo "$hosts_input" | tr '\n' ' ')"
+fi
+
+# --- 実行 ---
+for host in "${hosts[@]}"; do
+	[[ -z "$host" ]] && continue
+	echo "=== $host ==="
+	if [[ -n "$tty" ]]; then
+		ssh -t "$host" "$cmd"
+	else
+		ssh "$host" "$cmd"
+	fi
+	echo
+done

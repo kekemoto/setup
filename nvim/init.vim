@@ -26,6 +26,8 @@ set clipboard+=unnamed
 let loaded_matchparen = 1
 set fileencodings=utf-8,sjis,iso-2022-jp,euc-jp
 set termguicolors
+set exrc " カレントディレクトリの .exrc / .nvim.lua を読み込む
+set secure " 危険なコマンドは無効化
 
 " autocmd が二重に登録されないようにする
 " デフォルトのグループを kekemoto に設定"

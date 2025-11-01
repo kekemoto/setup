@@ -1,0 +1,42 @@
+#!/usr/bin/env expect
+# usage: sudoer <command> [args...]
+#   例) sudoer ~/setup/bin/ssher -c "sudo hostname" -h hosts.txt -t
+
+set timeout -1
+
+if {$argc < 1} {
+    puts "Usage: $argv0 <command> [args...]"
+    exit 1
+}
+
+# パスワード入力（非表示）
+puts -nonewline "sudo password (will not echo): "
+flush stdout
+exec /bin/stty -echo
+gets stdin pw
+exec /bin/stty echo
+puts ""
+
+# --- 修正版: -- を削除 ---
+# (古い expect では spawn -noecho -- ... がエラーになる)
+spawn -noecho {*}$argv
+
+# sudo プロンプト検出と応答
+expect {
+    -re {\[sudo\].*パスワード:} {
+        send -- "$pw\r"
+        exp_continue
+    }
+    -re {\[sudo\].*password:|[Pp]assword for .*:} {
+        send -- "$pw\r"
+        exp_continue
+    }
+    eof {}
+    timeout {
+        puts "timeout during command execution"
+    }
+}
+
+set pw ""
+exit 0
+
