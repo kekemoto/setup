@@ -92,6 +92,7 @@ else
 endif
 if has('nvim')
   nnoremap gd :lua vim.lsp.buf.definition()<CR>
+  nnoremap gD <Cmd>tab split<CR><Cmd>lua vim.lsp.buf.definition()<CR>
   nnoremap <Leader>lf :lua vim.lsp.buf.format()<CR>
   nnoremap <Leader>ls :lua vim.lsp.buf.document_symbol()<CR>
   nnoremap <Leader>lr :lua vim.lsp.buf.references()<CR>
@@ -125,6 +126,28 @@ nnoremap <script> <SID>gj gj<SID>g
 nnoremap <script> <SID>gk gk<SID>g
 nmap <SID>g <Nop>
 
+" TypeScript
+"
+" install LSP
+"   npm install -g typescript typescript-language-server
+if executable('typescript-language-server')
+  lua <<EOF
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = { "typescript", "typescriptreact", "javascript", "javascriptreact", "json" },
+    callback = function()
+      vim.lsp.start({
+        name = "typescript-language-server",
+        cmd = { "typescript-language-server", "--stdio" },
+        root_dir = vim.fs.root(0, { "tsconfig.json", "package.json", ".git" }),
+        filetypes = { "typescript", "typescriptreact", "javascript", "javascriptreact", "json" },
+        init_options = {
+          hostInfo = "neovim",
+        },
+      })
+    end,
+  })
+EOF
+endif
 
 " PHP
 "

@@ -35,6 +35,7 @@ alias install='nvim ~/setup/install.sh && apply'
 
 alias ls='ls -a --color=auto'
 alias ll='ls -alhF --color=auto'
+alias tree='tree --gitignore'
 # alias zip='paste'
 
 alias sudoer='~/setup/bin/sudoer'
@@ -547,7 +548,7 @@ gcb() {
 
 # git commit message
 gcm() {
-	git commit -m "$(make_git_commit_message)" && git commit --amend
+	git commit -m "$(make_git_commit_message)" && git commit --amend --no-verify
 }
 
 make_git_commit_message() {
@@ -735,6 +736,8 @@ fgb() {
 # -----
 # その他設定
 # -----
+
+source ~/setup/csv_tool.sh
 
 # ** のグロブ展開を可能にする
 shopt -s globstar
