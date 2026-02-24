@@ -228,12 +228,24 @@ _rgsed() {
 	esac
 }
 
+# rg の結果を nvim で開く
 vrg() {
 	rg "$@" -l | xargs nvim +"/$1" -p
 }
 
+# 自分のグローバルIPを確認する
 check_my_ip() {
 	curl http://checkip.amazonaws.com
+}
+
+# 差分を見やすいようにする
+dif() {
+	# あんま使わないから delta はデフォルトでは入れてない
+	diff -u "$1" "$2" | delta "${@:3}"
+}
+difs() {
+	# あんま使わないから delta はデフォルトでは入れてない
+	diff -u "$1" "$2" | delta --side-by-side "${@:3}"
 }
 
 # -----
@@ -585,6 +597,16 @@ gpull() {
 	git pull
 }
 
+# git conflict nvim
+gcn() {
+	git status -s | awk '$1 == "UU" { print $2 }' | xargs nvim +"/=======" -p
+}
+
+# git status nvim
+gsn() {
+	git status -s | awk '$1 != "D" { print $2 }' | xargs nvim -p
+}
+
 g_rebase() {
 	local branch=${1:-main}
 	local now=$(git branch --show-current)
@@ -604,7 +626,7 @@ g_pop() {
 
 # git diff merge
 gdm(){
-	git diff @...$(fgb)
+	git diff @..."$@"
 }
 
 g_code_review() {
@@ -675,7 +697,7 @@ alias dcu="docker compose up -d"
 alias dcul="dcu && dcl"
 alias dcs="docker compose stop"
 alias dcd="docker compose down -t 5"
-alias dcl="docker compose logs -f"
+alias dcl="docker compose logs -f --tail 1000"
 # alias dcr="docker compose restart -t 5"
 
 de() {
