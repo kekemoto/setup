@@ -240,7 +240,9 @@ vrg() {
 
 # rg の結果を fzf でファイル選択して nvim で開く
 frg() {
-       nvim $(rg "$@" -l | fzf)
+	local file=$(rg "$@" -l | fzf)
+	[ -z "$file" ] && return 1
+	nvim +"/$1" "$file"
 }
 
 # 自分のグローバルIPを確認する
