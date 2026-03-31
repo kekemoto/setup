@@ -153,9 +153,9 @@ asdf_add() {
 	local name=$1
 	local version=${2:-latest}
 
-	asdf plugin add "$name" &&
-		asdf install "$name" "$version" &&
-		asdf global "$name" "$version"
+	asdf plugin add "$name" \
+		&& asdf install "$name" "$version" \
+		&& asdf global "$name" "$version"
 }
 
 asdf_remove() {
@@ -228,9 +228,19 @@ _rgsed() {
 	esac
 }
 
+# 標準入力のファイル一覧を nvim のタブで開く
+nvimp() {
+	xargs nvim -p
+}
+
 # rg の結果を nvim で開く
 vrg() {
 	rg "$@" -l | xargs nvim +"/$1" -p
+}
+
+# rg の結果を fzf でファイル選択して nvim で開く
+frg() {
+       nvim $(rg "$@" -l | fzf)
 }
 
 # 自分のグローバルIPを確認する
@@ -248,12 +258,16 @@ difs() {
 	diff -u "$1" "$2" | delta --side-by-side "${@:3}"
 }
 
+ssh_hosts(){
+	cat ~/.ssh/config | grep '^Host ' | grep -v '\*' | awk '{print $2}'
+}
+
 # -----
 # llm
 # -----
 
-HAIKU='claude-3-5-haiku-latest'
-SONNET='claude-3-7-sonnet-latest'
+HAIKU='claude-haiku-4-5'
+SONNET='claude-sonnet-4-5'
 anthropic_cli() {
 	local message=$(cat -)
 	local model=${1:-$HAIKU}
