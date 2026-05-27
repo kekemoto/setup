@@ -223,6 +223,8 @@ Plug 'tpope/vim-surround'
 Plug 'lewis6991/gitsigns.nvim'
 " カラーテーマ
 Plug 'navarasu/onedark.nvim'
+" Astro syntax highlight
+Plug 'wuelnerdotexe/vim-astro'
 call plug#end()
 
 lua <<EOF

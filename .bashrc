@@ -270,7 +270,7 @@ ssh_hosts(){
 
 HAIKU='claude-haiku-4-5'
 SONNET='claude-sonnet-4-5'
-anthropic_cli() {
+anthropic_api() {
 	local message=$(cat -)
 	local model=${1:-$HAIKU}
 	local tmpfile=$(mktemp)
@@ -299,6 +299,12 @@ anthropic_cli() {
 	rm -f "$tmpfile"
 }
 
+# models: haiku, sonnet, opus
+claude_code() {
+	local model=${1:-sonnet}
+	claude -p --settings '{"disableAllHooks":true}' --strict-mcp-config --mcp-config "" --disable-slash-commands --model "$model"
+}
+
 if command -v ollama >/dev/null; then
 	# ollama サーバーが起動してなかったら起動する
 	pgrep -f "ollama serve" > /dev/null || { nohup ollama serve > ~/ollama.log 2>&1 & }
@@ -311,7 +317,7 @@ if command -v ollama >/dev/null; then
 	}
 fi
 
-alias llm="anthropic_cli"
+alias llm="claude_code"
 
 # -----
 # tmux
@@ -366,7 +372,8 @@ load_project() {
 }
 
 # PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
-PROMPT_COMMAND='load_project; local_window'
+#PROMPT_COMMAND='load_project; local_window'
+PROMPT_COMMAND='load_project'
 
 # -----
 # Sound
@@ -580,7 +587,7 @@ gcm() {
 }
 
 make_git_commit_message() {
-	git diff --staged | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、空行を入れてから詳細を書いてください。それを日本語でコミットメッセージだけを直接出力してください" | llm
+	git diff --staged -- . ':(exclude)package-lock.json' ':(exclude)worker-configuration.d.ts' | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、空行を入れてから詳細を書いてください。それを日本語で**コミットメッセージだけ**を出力してください" | llm
 }
 
 # git switch
