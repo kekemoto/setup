@@ -265,48 +265,6 @@ ssh_hosts(){
 }
 
 # -----
-# trash
-# -----
-
-TRASH_DIR="$HOME/trash"
-
-trash() {
-    if [ "$#" -eq 0 ]; then
-        echo "trash: 引数がありません" >&2
-        return 1
-    fi
-
-    mkdir -p "$TRASH_DIR"
-
-    local f base target
-    for f in "$@"; do
-        # オプション(-rf 等)はスキップ。ファイルとして扱わない
-        case "$f" in
-            -*) continue ;;
-        esac
-
-        if [ ! -e "$f" ] && [ ! -L "$f" ]; then
-            echo "trash: '$f' は存在しません" >&2
-            continue
-        fi
-
-        # 末尾スラッシュを除去してから basename を取る
-        base=$(basename "${f%/}")
-        target="$TRASH_DIR/$base"
-
-        # 同名衝突したらタイムスタンプを付与
-        if [ -e "$target" ]; then
-            target="$TRASH_DIR/${base}.$(date +%Y%m%d_%H%M%S_%N)"
-        fi
-
-        mv -- "$f" "$target"
-		touch "$target"
-    done
-}
-# 31 日以上前にゴミ箱に入れたデータを削除する
-[ -d "$TRASH_DIR" ] && find "$TRASH_DIR" -mtime +30 -delete
-
-# -----
 # llm
 # -----
 
@@ -790,7 +748,7 @@ dd() {
 # -----
 
 # https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.bash
-source ~/setup/key-bindings.sh
+source ~/setup/scripts/key-bindings.sh
 
 fcd() {
 	cd ~
@@ -824,7 +782,9 @@ fgb() {
 # その他設定
 # -----
 
-source ~/setup/csv_tool.sh
+source ~/setup/scripts/csv_tool.sh
+source ~/setup/scripts/trash.sh
+source ~/setup/scripts/git_worktree.sh
 
 # ** のグロブ展開を可能にする
 shopt -s globstar
