@@ -15,14 +15,14 @@ _gw_wt_root() {
 	printf '%s/%s' "${GW_ROOT:-$HOME/worktrees}" "$(basename "$root")"
 }
 
-# 切替: 本体 + 全 worktree から fzf で選んで cd
 gws() {
 	git rev-parse --git-dir >/dev/null 2>&1 || {
 		echo "git リポジトリ内で実行してください" >&2
 		return 1
 	}
-	local dir
-	dir=$(git worktree list | fzf --prompt="switch> " | awk '{print $1}') || return 0
+	local line dir
+	line=$(git worktree list | fzf --prompt="switch> " --query "$1" --select-1) || return 0
+	dir=$(printf '%s' "$line" | awk '{print $1}')
 	[ -n "$dir" ] && cd "$dir"
 }
 

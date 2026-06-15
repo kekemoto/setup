@@ -37,5 +37,10 @@ trash() {
 	done
 }
 
+sudo_trash() {
+	sudo bash -c "$(declare -f trash); TRASH_DIR='$TRASH_DIR' trash \"\$@\"" _ "$@" &&
+		sudo chown -R "$(id -u):$(id -g)" "$TRASH_DIR"
+}
+
 # 31 日以上前にゴミ箱に入れたデータを削除する
 [ -d "$TRASH_DIR" ] && find "$TRASH_DIR" -mindepth 1 -maxdepth 1 -mtime +30 -exec rm -rf {} +
