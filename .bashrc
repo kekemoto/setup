@@ -660,9 +660,7 @@ g_code_review() {
 
 g_branch_all_delete() {
 	local branch=${1:-main}
-	git switch $branch &&
-		gpull &&
-		git branch | map git branch -d
+	git switch $branch && gpull && git branch | awk '{print $1}' | grep -v '*' | xargs git branch -d
 }
 
 g_project_switch() {

@@ -153,3 +153,15 @@ for row in r:
     print(separator)
 ' "$@"
 }
+
+# 標準入力から CSV を受け取り、ヘッダーをキーにして各行を JSON Lines で出力する
+csv_json() {
+	python3 -c '
+import csv, sys, json, signal
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)  # BrokenPipeError防止
+
+r = csv.DictReader(sys.stdin)
+for row in r:
+    print(json.dumps(dict(row), ensure_ascii=False))
+'
+}
