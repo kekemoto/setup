@@ -186,9 +186,7 @@ autocmd FileType go setlocal shiftwidth=4
 " Zig
 "
 " install LSP
-"   asdf plugin add zls
-"   asdf install zls 0.14.0
-"   asdf global zls 0.14.0
+"   mise use --global zls@0.14.0
 if executable('zls')
   lua <<EOF
     vim.api.nvim_create_autocmd("FileType", {
