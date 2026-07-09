@@ -54,13 +54,13 @@ mise use --global --yes \
 	jq@latest \
 	fzf@latest \
 	fd@latest \
-	ripgrep@latest \
-	pipx@latest
+	ripgrep@latest
 # mise use --global --yes redis-cli@latest
 # mise use --global --yes zig@latest zls@latest
 
-# mycli は mise の pipx バックエンドで導入する
-mise use --global --yes pipx:mycli
+# mycli は mise の python の pip で導入する
+mise exec -- python -m pip install --quiet mycli
+mise reshim
 
 cd $HOME/setup
 
