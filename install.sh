@@ -15,16 +15,24 @@ install_asdf_plugin() {
 	local version=$2
 	local url=$3
 
+	# プラグインを追加（未追加の場合のみ）
+	if ! asdf plugin list 2>/dev/null | grep -qx "$name"; then
+		asdf plugin add "$name" "$url"
+	else
+		asdf plugin update "$name"
+	fi
+
+	# バージョンが latest の場合は最新の安定版を取得
+	local target_version="$version"
+	if test "$version" = "latest"; then
+		target_version=$(asdf latest "$name")
+	fi
+
 	local installed_version
 	installed_version=$(asdf current "$name" 2>/dev/null | awk '{print $2}')
-	if [ -z "$installed_version" ]; then
-		asdf plugin add "$name" "$url"
-		asdf install "$name" "$version"
-		asdf global "$name" "$version"
-	elif test "$installed_version" != "$version"; then
-		asdf plugin update "$name"
-		asdf install "$name" "$version"
-		asdf global "$name" "$version"
+	if test "$installed_version" != "$target_version"; then
+		asdf install "$name" "$target_version"
+		asdf global "$name" "$target_version"
 	fi
 }
 
@@ -65,18 +73,19 @@ fi
 
 # intall asdf plugin
 . "$HOME/.asdf/asdf.sh"
-install_asdf_plugin python 3.13.5 https://github.com/danhper/asdf-python.git
-install_asdf_plugin nvim 0.10.0 https://github.com/richin13/asdf-neovim.git
-install_asdf_plugin tmux 3.4 https://github.com/aphecetche/asdf-tmux.git
-install_asdf_plugin node 25.2.1 https://github.com/asdf-vm/asdf-nodejs.git
-install_asdf_plugin jq 1.7.1 https://github.com/lsanwick/asdf-jq.git
-install_asdf_plugin fzf 0.53.0 https://github.com/kompiro/asdf-fzf.git
-install_asdf_plugin fd 9.0.0 https://gitlab.com/wt0f/asdf-fd.git
-install_asdf_plugin rg 14.1.0 https://gitlab.com/wt0f/asdf-ripgrep.git
-# install_asdf_plugin redis-cli 7.4.0   https://github.com/NeoHsu/asdf-redis-cli.git
-# install_asdf_plugin mysql     8.0.33  https://github.com/iroddis/asdf-mysql.git
-# install_asdf_plugin zig       0.14.0  https://github.com/cheetah/asdf-zig.git
-# install_asdf_plugin zls       0.14.0  https://github.com/m1ome/asdf-zls
+# バージョンに latest を指定すると最新の安定版をインストールする
+install_asdf_plugin python latest https://github.com/danhper/asdf-python.git
+install_asdf_plugin nvim latest https://github.com/richin13/asdf-neovim.git
+install_asdf_plugin tmux latest https://github.com/aphecetche/asdf-tmux.git
+install_asdf_plugin node latest https://github.com/asdf-vm/asdf-nodejs.git
+install_asdf_plugin jq latest https://github.com/lsanwick/asdf-jq.git
+install_asdf_plugin fzf latest https://github.com/kompiro/asdf-fzf.git
+install_asdf_plugin fd latest https://gitlab.com/wt0f/asdf-fd.git
+install_asdf_plugin rg latest https://gitlab.com/wt0f/asdf-ripgrep.git
+# install_asdf_plugin redis-cli latest https://github.com/NeoHsu/asdf-redis-cli.git
+# install_asdf_plugin mysql     latest https://github.com/iroddis/asdf-mysql.git
+# install_asdf_plugin zig       latest https://github.com/cheetah/asdf-zig.git
+# install_asdf_plugin zls       latest https://github.com/m1ome/asdf-zls
 
 if command -v pip >/dev/null; then
 	if ! command -v mycli >/dev/null; then
