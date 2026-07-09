@@ -18,6 +18,8 @@ cd ~/setup && ./install.sh
 
 `.bashrc`・`.tmux.conf`・`nvim/` を `$HOME` にコピーし（既存コピーは上書き）、`mise` でツールチェインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
 
+旧環境から移行する場合は `uninstall_asdf.sh` で既存の asdf を削除できる（削除前に asdf 管理下のツール一覧を表示し、`~/.tool-versions` はバックアップとして退避する）。
+
 `.bashrc` には通常の編集・テストループとなる `apply` エイリアスが定義されている:
 
 ```bash
