@@ -10,32 +10,6 @@ require_command() {
 	fi
 }
 
-install_asdf_plugin() {
-	local name=$1
-	local version=$2
-	local url=$3
-
-	# プラグインを追加（未追加の場合のみ）
-	if ! asdf plugin list 2>/dev/null | grep -qx "$name"; then
-		asdf plugin add "$name" "$url"
-	else
-		asdf plugin update "$name"
-	fi
-
-	# バージョンが latest の場合は最新の安定版を取得
-	local target_version="$version"
-	if test "$version" = "latest"; then
-		target_version=$(asdf latest "$name")
-	fi
-
-	local installed_version
-	installed_version=$(asdf current "$name" 2>/dev/null | awk '{print $2}')
-	if test "$installed_version" != "$target_version"; then
-		asdf install "$name" "$target_version"
-		asdf global "$name" "$target_version"
-	fi
-}
-
 # ---------
 # メイン
 # ---------
@@ -48,7 +22,7 @@ fi
 
 # 必要なコマンドが入っているか
 
-# for install asdf
+# for install mise
 require_command git
 require_command curl
 require_command gcc
@@ -64,36 +38,28 @@ fi
 # for Python on Ubuntu
 # sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
 
-# install asdf
-if ! command -v asdf >/dev/null; then
-	cd $HOME
-	([ -e "$HOME/.asdf" ] || git clone https://github.com/asdf-vm/asdf.git --branch 'v0.15.0' .asdf)
-	. "$HOME/.asdf/asdf.sh"
+# install mise
+if ! command -v mise >/dev/null; then
+	curl https://mise.run | sh
 fi
+export PATH="$HOME/.local/bin:$PATH"
 
-# intall asdf plugin
-. "$HOME/.asdf/asdf.sh"
-# バージョンに latest を指定すると最新の安定版をインストールする
-install_asdf_plugin python latest https://github.com/danhper/asdf-python.git
-install_asdf_plugin nvim latest https://github.com/richin13/asdf-neovim.git
-install_asdf_plugin tmux latest https://github.com/aphecetche/asdf-tmux.git
-install_asdf_plugin node latest https://github.com/asdf-vm/asdf-nodejs.git
-install_asdf_plugin jq latest https://github.com/lsanwick/asdf-jq.git
-install_asdf_plugin fzf latest https://github.com/kompiro/asdf-fzf.git
-install_asdf_plugin fd latest https://gitlab.com/wt0f/asdf-fd.git
-install_asdf_plugin rg latest https://gitlab.com/wt0f/asdf-ripgrep.git
-# install_asdf_plugin redis-cli latest https://github.com/NeoHsu/asdf-redis-cli.git
-# install_asdf_plugin mysql     latest https://github.com/iroddis/asdf-mysql.git
-# install_asdf_plugin zig       latest https://github.com/cheetah/asdf-zig.git
-# install_asdf_plugin zls       latest https://github.com/m1ome/asdf-zls
+# ツールチェインをインストールし、グローバルに設定する
+# @latest を指定すると最新の安定版をインストールする
+mise use --global --yes \
+	python@latest \
+	neovim@latest \
+	tmux@latest \
+	node@latest \
+	jq@latest \
+	fzf@latest \
+	fd@latest \
+	ripgrep@latest
+# mise use --global --yes redis-cli@latest
+# mise use --global --yes zig@latest zls@latest
 
-if command -v pip >/dev/null; then
-	if ! command -v mycli >/dev/null; then
-		pip install -U mycli
-	fi
-else
-	echo "mycli はインストールできませんでした（pip が見つからなかった）"
-fi
+# mycli は mise の pipx バックエンドで導入する
+mise use --global --yes pipx:mycli
 
 cd $HOME/setup
 

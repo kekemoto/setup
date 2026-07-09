@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## このリポジトリの概要
 
-`kekemoto` 個人の開発環境 dotfiles。bash・tmux・Neovim・git、および `asdf` で管理するツールチェインをインストール・設定する。アプリケーションコード・ビルド手順・テストスイートは存在せず、「成果物」は `install.sh` が `$HOME` に展開するシェル環境そのものである。
+`kekemoto` 個人の開発環境 dotfiles。bash・tmux・Neovim・git、および `mise` で管理するツールチェインをインストール・設定する。アプリケーションコード・ビルド手順・テストスイートは存在せず、「成果物」は `install.sh` が `$HOME` に展開するシェル環境そのものである。
 
 コメント・コミットメッセージ・ユーザー向けプロンプトはすべて日本語で書かれている。編集時もこの慣習を守ること。
 
@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd ~/setup && ./install.sh
 ```
 
-`.bashrc`・`.tmux.conf`・`nvim/` を `$HOME` にコピーし（既存コピーは上書き）、バージョン固定した `asdf` プラグインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
+`.bashrc`・`.tmux.conf`・`nvim/` を `$HOME` にコピーし（既存コピーは上書き）、`mise` でツールチェインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
 
 `.bashrc` には通常の編集・テストループとなる `apply` エイリアスが定義されている:
 
@@ -34,7 +34,7 @@ apply   # = cd ~/setup && ./install.sh && cd - && . ~/.bashrc
 shfmt -w ~/setup/**/*.sh
 ```
 
-`shfmt` は `install.sh` ではインストールされない（`asdf_add shfmt` で追加する）。`setup_fmt` は `shfmt` が無ければ何もしない。
+`shfmt` は `install.sh` ではインストールされない（`mise_add shfmt` で追加する）。`setup_fmt` は `shfmt` が無ければ何もしない。
 
 ## 構成と読み込み順
 
@@ -62,7 +62,7 @@ shfmt -w ~/setup/**/*.sh
 
 ## ツールチェインのバージョン
 
-`install.sh` の `install_asdf_plugin` で固定: python 3.13.5・nvim 0.10.0・tmux 3.4・node 25.2.1・jq 1.7.1・fzf 0.53.0・fd 9.0.0・rg 14.1.0。多くの bash 関数は `fzf`・`fd`・`rg`・`jq`・`nvim`（`$EDITOR`）の存在を前提にしている。依存を追加するときは、存在を仮定せずここにバージョンを固定すること。
+`install.sh` の `mise use --global` で導入: python・neovim・tmux・node・jq・fzf・fd・ripgrep（いずれも `@latest` 指定で最新安定版を取得）。多くの bash 関数は `fzf`・`fd`・`rg`・`jq`・`nvim`（`$EDITOR`）の存在を前提にしている。依存を追加するときは、`install.sh` の `mise use` 行に追記すること（バージョンを固定したい場合は `@latest` を具体的なバージョンに置き換える）。
 
 ## コミットメッセージ形式
 

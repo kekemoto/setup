@@ -149,19 +149,16 @@ is_file_permission() {
 	fi
 }
 
-asdf_add() {
+mise_add() {
 	local name=$1
 	local version=${2:-latest}
 
-	asdf plugin add "$name" \
-		&& asdf install "$name" "$version" \
-		&& asdf global "$name" "$version"
+	mise use --global "$name@$version"
 }
 
-asdf_remove() {
+mise_remove() {
 	local name=$1
-	asdf plugin remove "$name"
-	asdf reshim
+	mise uninstall "$name"
 }
 
 # 標準出力の内容をクリップボードに
@@ -768,13 +765,14 @@ fgb() {
 }
 
 # -----
-# asdf
+# mise
 # -----
 
-. "$HOME/.asdf/asdf.sh"
+export PATH="$HOME/.local/bin:$PATH"
+eval "$(mise activate bash)"
 
-# asdf_add shfmt
-# asdf_add redis-cli
+# mise_add shfmt
+# mise_add redis-cli
 
 # -----
 # その他設定
