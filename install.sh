@@ -54,7 +54,8 @@ mise use --global --yes \
 	jq@latest \
 	fzf@latest \
 	fd@latest \
-	ripgrep@latest
+	ripgrep@latest \
+	pipx@latest
 # mise use --global --yes redis-cli@latest
 # mise use --global --yes zig@latest zls@latest
 
