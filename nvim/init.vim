@@ -172,7 +172,7 @@ if executable('phpactor')
             ["language_server_psalm.enabled"] = false,
           },
         })
-        vim.diagnostic.disable(0)
+        vim.diagnostic.enable(false, { bufnr = 0 })
       end,
     })
 EOF
