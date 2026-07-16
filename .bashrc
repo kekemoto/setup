@@ -563,7 +563,7 @@ gl() {
 # git add -N
 gan() {
 	# git ls-files --others --exclude-standard -z | xargs -0 git add -N
-	git add -AN
+	git add -AN "$@"
 }
 
 # git add -p
