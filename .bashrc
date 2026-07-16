@@ -37,7 +37,7 @@ alias ls='ls -a --color=auto'
 alias ll='ls -alhF --color=auto'
 alias tree='tree --gitignore'
 alias cl='claude'
-alias clc='claude --cotinue'
+alias clc='claude --continue'
 alias clr='claude --resume'
 # alias zip='paste'
 
