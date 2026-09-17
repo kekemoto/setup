@@ -35,6 +35,7 @@ alias install='nvim ~/setup/install.sh && apply'
 
 alias ls='ls -a --color=auto'
 alias ll='ls -alhF --color=auto'
+alias less='less -M'
 alias tree='tree --gitignore'
 alias cl='claude'
 alias clc='claude --continue'
@@ -630,6 +631,7 @@ gsn() {
 	git status -s | awk '$1 != "D" { print $2 }' | xargs nvim -p
 }
 
+# git rebase
 g_rebase() {
 	local branch=${1:-main}
 	local now=$(git branch --show-current)
@@ -639,10 +641,20 @@ g_rebase() {
 		git rebase $branch
 }
 
+# git merge
+g_merge ()
+{
+    local branch=${1:-main};
+    local now=$(git branch --show-current);
+    git switch $branch && gpull && git switch $now && git merge $branch
+}
+
+# git stash save
 g_save() {
 	git stash push -u
 }
 
+# git stash pop
 g_pop() {
 	git stash pop
 }
