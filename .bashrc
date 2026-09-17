@@ -757,6 +757,8 @@ dd() {
 # fzf
 # -----
 
+export FZF_DEFAULT_OPTS='--tmux'
+
 # https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.bash
 source ~/setup/scripts/key-bindings.sh
 
