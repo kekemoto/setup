@@ -46,20 +46,38 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # ツールチェインをインストールし、グローバルに設定する
 # @latest を指定すると最新の安定版をインストールする
-mise use --global --yes \
-	python@latest \
-	neovim@latest \
-	tmux@latest \
-	node@latest \
-	jq@latest \
-	fzf@latest \
-	fd@latest \
+tools=(
+	python@latest
+	neovim@latest
+	tmux@latest
+	node@latest
+	jq@latest
+	fzf@latest
+	fd@latest
 	ripgrep@latest
-# mise use --global --yes redis-cli@latest
-# mise use --global --yes zig@latest zls@latest
+	# redis-cli@latest
+	# zig@latest
+	# zls@latest
+)
+
+# インストール済みのツールは飛ばす（更新したいときは mise_upgrade を使う）
+installed=$(mise ls --global --installed 2>/dev/null | awk '{print $1}') || true
+
+targets=()
+for tool in "${tools[@]}"; do
+	if ! echo "$installed" | grep -qx "${tool%@*}"; then
+		targets+=("$tool")
+	fi
+done
+
+if [ ${#targets[@]} -ne 0 ]; then
+	mise use --global --yes "${targets[@]}"
+fi
 
 # mycli は mise の python の pip で導入する
-mise exec -- python -m pip install --quiet mycli
+if ! mise exec -- python -m pip show mycli >/dev/null 2>&1; then
+	mise exec -- python -m pip install --quiet mycli
+fi
 mise reshim
 
 cd $HOME/setup

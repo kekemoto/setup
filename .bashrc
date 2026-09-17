@@ -165,6 +165,11 @@ mise_remove() {
 	mise uninstall "$name"
 }
 
+# インストール済みのツールを最新版に更新する
+mise_upgrade() {
+	mise upgrade
+}
+
 # 標準出力の内容をクリップボードに
 yank() {
 	if is_wsl; then
