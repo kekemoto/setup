@@ -9,6 +9,7 @@ export COLOR_BLUE="\e[34m"
 export COLOR_END="\e[m"
 
 export EDITOR=nvim
+export LESS='-M'
 
 # -----
 # Prompt
@@ -35,7 +36,6 @@ alias install='nvim ~/setup/install.sh && apply'
 
 alias ls='ls -a --color=auto'
 alias ll='ls -alhF --color=auto'
-alias less='less -M'
 alias tree='tree --gitignore'
 alias cl='claude'
 alias clc='claude --continue'
