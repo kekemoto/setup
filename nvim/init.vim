@@ -265,6 +265,12 @@ let g:ctrlp_custom_ignore = 'node_modules\|DS_Store\|git'
 " Plug 'navarasu/onedark.nvim'
 colorscheme onedark
 
+" Plug 'sheerun/vim-polyglot'
+augroup FixIsfname
+  autocmd!
+  autocmd BufEnter * if &filetype ==# 'perl' | set isfname+=: | else | set isfname-=: | endif
+augroup END
+
 " neovim のみの設定
 if has('nvim')
   autocmd BufWritePre *.go,*.js,*.ts lua vim.lsp.buf.format({ async = false })

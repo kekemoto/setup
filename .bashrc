@@ -239,6 +239,14 @@ nvimp() {
 	xargs nvim -p
 }
 
+# 行数の指定付きのパスを開く
+nvimg() {
+  case "$1" in
+    *:*) nvim "+${1##*:}" "${1%:*}" ;;
+    *)   nvim "$1" ;;
+  esac
+}
+
 # rg の結果を nvim で開く
 vrg() {
 	rg "$@" -l | xargs nvim +"/$1" -p
