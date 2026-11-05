@@ -9,7 +9,7 @@ export COLOR_BLUE="\e[34m"
 export COLOR_END="\e[m"
 
 export EDITOR=nvim
-export LESS='-M -R'
+export LESS='-M -R -F -X'
 
 # -----
 # Prompt
