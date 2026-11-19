@@ -26,8 +26,6 @@ fi
 require_command git
 require_command curl
 require_command gcc
-# for install tmux
-require_command make
 require_command unzip
 
 # デフォルトのシェルを変更
@@ -49,7 +47,7 @@ export PATH="$HOME/.local/bin:$PATH"
 tools=(
 	python@latest
 	neovim@latest
-	tmux@latest
+	herdr@latest
 	node@latest
 	jq@latest
 	fzf@latest
@@ -88,11 +86,9 @@ if [ -f $HOME/.bashrc ]; then
 fi
 cp -rfp ./.bashrc $HOME/
 
-# tmux
-if [ -f $HOME/.tmux.conf ]; then
-	rm $HOME/.tmux.conf
-fi
-cp -rfp ./.tmux.conf $HOME/
+# herdr
+mkdir -p $HOME/.config/herdr
+cp -rfp ./herdr/. $HOME/.config/herdr/
 
 # Neovim
 mkdir -p $HOME/.config

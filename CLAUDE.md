@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## このリポジトリの概要
 
-`kekemoto` 個人の開発環境 dotfiles。bash・tmux・Neovim・git、および `mise` で管理するツールチェインをインストール・設定する。アプリケーションコード・ビルド手順・テストスイートは存在せず、「成果物」は `install.sh` が `$HOME` に展開するシェル環境そのものである。
+`kekemoto` 個人の開発環境 dotfiles。bash・herdr・Neovim・git、および `mise` で管理するツールチェインをインストール・設定する。アプリケーションコード・ビルド手順・テストスイートは存在せず、「成果物」は `install.sh` が `$HOME` に展開するシェル環境そのものである。
 
 コメント・コミットメッセージ・ユーザー向けプロンプトはすべて日本語で書かれている。編集時もこの慣習を守ること。
 
@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd ~/setup && ./install.sh
 ```
 
-`.bashrc`・`.tmux.conf`・`nvim/` を `$HOME` にコピーし（既存コピーは上書き）、`mise` でツールチェインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
+`.bashrc`・`herdr/config.toml`（`~/.config/herdr/` へ）・`nvim/` を `$HOME` にコピーし（既存コピーは上書き）、`mise` でツールチェインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
 
 旧環境から移行する場合は `uninstall_asdf.sh` で既存の asdf を削除できる（削除前に asdf 管理下のツール一覧を表示し、`~/.tool-versions` はバックアップとして退避する）。
 
@@ -26,7 +26,7 @@ cd ~/setup && ./install.sh
 apply   # = cd ~/setup && ./install.sh && cd - && . ~/.bashrc
 ```
 
-編集用エイリアス（`bashrc`・`vimrc`・`tmuxrc`・`install`）は `$HOME/setup` 内の対応するソースファイルを開き、保存後に `apply` を実行する。したがって編集は**このリポジトリ内のファイル**に対して行い、`$HOME` に展開済みのコピーには決して触れないこと。
+編集用エイリアス（`bashrc`・`vimrc`・`herdrrc`・`install`）は `$HOME/setup` 内の対応するソースファイルを開き、保存後に `apply` を実行する。したがって編集は**このリポジトリ内のファイル**に対して行い、`$HOME` に展開済みのコピーには決して触れないこと。
 
 ## フォーマット
 
@@ -49,7 +49,7 @@ shfmt -w ~/setup/**/*.sh
 
 ローカル用・git 管理外の 2 つのエスケープハッチが最後にソースされ、ソース前に `600` 権限を検証する:
 - `~/.bashrc_local` ── マシン固有の設定（`bashlo` で編集）
-- `~/.bashrc_project` ── プロジェクト単位の設定。ディレクトリツリーを遡って探索し（`find_up`）、`PROMPT_COMMAND='load_project'` によりプロンプトごとに再ソースされる。最も近いものを `bashpr` で編集する。
+- `~/.bashrc_project` ── プロジェクト単位の設定。ディレクトリツリーを遡って探索し（`find_up`。git worktree 内で見つからなければメインの worktree から探す）、`PROMPT_COMMAND='load_project'` によりプロンプトごとに再ソースされる。最も近いものを `bashpr` で編集する。
 
 `bin/` には（ソースされない）スタンドアロン実行ファイルが 2 つある: `ssher`（複数の SSH ホストで同一コマンドを実行）と `sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー）。
 
@@ -64,7 +64,7 @@ shfmt -w ~/setup/**/*.sh
 
 ## ツールチェインのバージョン
 
-`install.sh` の `mise use --global` で導入: python・neovim・tmux・node・jq・fzf・fd・ripgrep（いずれも `@latest` 指定で最新安定版を取得）。多くの bash 関数は `fzf`・`fd`・`rg`・`jq`・`nvim`（`$EDITOR`）の存在を前提にしている。依存を追加するときは、`install.sh` の `mise use` 行に追記すること（バージョンを固定したい場合は `@latest` を具体的なバージョンに置き換える）。
+`install.sh` の `mise use --global` で導入: python・neovim・herdr・node・jq・fzf・fd・ripgrep（いずれも `@latest` 指定で最新安定版を取得）。多くの bash 関数は `fzf`・`fd`・`rg`・`jq`・`nvim`（`$EDITOR`）の存在を前提にしている。依存を追加するときは、`install.sh` の `mise use` 行に追記すること（バージョンを固定したい場合は `@latest` を具体的なバージョンに置き換える）。
 
 ## コミットメッセージ形式
 

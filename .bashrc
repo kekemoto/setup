@@ -109,7 +109,7 @@ append() {
 }
 
 stderr() {
-	echo $1 >&2
+	echo "$1" >&2
 }
 
 # # 親プロセスのコマンド名
@@ -120,23 +120,39 @@ stderr() {
 # ディレクトリを遡ってファイル検索
 find_up() {
 	local file="$1"
-	local dir="$PWD"
+	local dir="${2:-$PWD}"
+	[[ "$dir" == /* ]] || dir="$PWD/$dir" # 相対パスだと / に届かず止まらないため
 	while [ "$dir" != "/" ]; do
 		if [ -e "$dir/$file" ]; then
 			echo "$dir/$file"
 			return 0
 		fi
-		dir=$(dirname "$dir")
+		dir=${dir%/*}
+		dir=${dir:-/}
 	done
 	return 1
 }
 
+# .bashrc_project のパスを取得する
+# 見つからず git worktree の中にいる場合は、メインの worktree から探す
+_find_project_file() {
+	find_up .bashrc_project && return 0
+	local dotgit main
+	# PROMPT_COMMAND から毎回呼ばれるので、git を起動するのは .git がファイル（linked worktree）のときだけにする
+	# .git がディレクトリならメインの worktree の中にいるので探索済み
+	dotgit=$(find_up .git) && [ -f "$dotgit" ] || return 1
+	# メインの worktree は一覧の先頭（common_dir の親とは限らない）
+	read -r _ main < <(git worktree list --porcelain 2>/dev/null)
+	[ -n "$main" ] || return 1
+	find_up .bashrc_project "$main"
+}
+
 # .bashrc_project を編集して読み込み
 bashpr() {
-	local path=$(find_up .bashrc_project)
+	local path=$(_find_project_file)
 	if [ -n "$path" ]; then
 		nvim "$path"
-		source "$path"
+		_check_600 "$path" && source "$path"
 	fi
 }
 
@@ -151,6 +167,15 @@ is_file_permission() {
 	else
 		return 1
 	fi
+}
+
+# source してよいファイル（権限が 600）か検証する。違えば警告して 1 を返す
+# シンボリックリンクはリンク自身の権限（777）で判定されるので常に弾く（clone したリポジトリ経由で任意のファイルを読ませないため）
+# source は呼び出し側で行う（関数内で source すると declare がローカル変数になるため）
+_check_600() {
+	is_file_permission "$1" 600 && return 0
+	stderr "$1 の権限が 600 ではありません"
+	return 1
 }
 
 mise_add() {
@@ -334,27 +359,72 @@ fi
 alias llm="claude_code"
 
 # -----
-# tmux
+# herdr
 # -----
 
-alias tmuxrc='nvim ~/setup/.tmux.conf && apply'
+# 保存後、起動中の herdr にも設定を反映する
+alias herdrrc='nvim ~/setup/herdr/config.toml && apply && { [ -z "$HERDR_PANE_ID" ] || herdr server reload-config >/dev/null; }'
 
-# window の色を変更する
-alias color_red='[ -n "$TMUX" ] && tmux select-pane -P "bg=#350000,fg=white"'
-alias color_green='[ -n "$TMUX" ] && tmux select-pane -P "bg=#003500,fg=white"'
-alias color_black='[ -n "$TMUX" ] && tmux select-pane -P "bg=black,fg=white"'
+# pane の色を変更する（OSC 10/11 で文字色・背景色を設定し、OSC 110/111 で元に戻す）
+_pane_color() {
+	[ -z "$HERDR_PANE_ID" ] && return 0
+	if [ -n "$1" ]; then
+		printf '\e]11;%s\a\e]10;white\a' "$1"
+	else
+		printf '\e]111\a\e]110\a'
+	fi
+}
+alias color_red='_pane_color "#350000"'
+alias color_green='_pane_color "#003500"'
+alias color_black='_pane_color'
 
-# window の色と名前を変更する
-change_window() {
-	eval color_$1
-	tmux rename-window $2
+# tab の名前を変更する
+tab_rename() {
+	[ -z "$HERDR_TAB_ID" ] || [ -z "$1" ] || herdr tab rename "$HERDR_TAB_ID" "$1" >/dev/null
 }
 
-tmux_split() {
-	tmux split-window -h \; \
-		split-window -v \; \
-		select-pane -t 0 \; \
-		split-window -v
+# pane の色と tab の名前を変更する
+change_window() {
+	eval color_$1
+	tab_rename "$2"
+}
+
+# 名前付きセッションに入る。無ければカレントディレクトリで作る（tmux new-session -A 相当）
+# 停止中のセッションは保存済みのレイアウトと cwd で復元され、カレントディレクトリが無視されるので破棄して作り直す
+herdr_session() {
+	local name=$1
+	if [ -n "$HERDR_PANE_ID" ]; then
+		stderr "herdr の中では入れ子にできません"
+		return 1
+	fi
+	# default の session_dir は ~/.config/herdr そのものなので、削除対象にしない
+	if [ -z "$name" ] || [ "$name" = default ]; then
+		stderr "Usage: herdr_session <name>（default 以外）"
+		return 1
+	fi
+	# jq -e: 0=起動中 1=停止中または未作成 それ以外=一覧の取得に失敗（削除せず中止する）
+	herdr session list --json | jq -e --arg n "$name" 'any(.sessions[]; .name == $n and .running)' >/dev/null
+	case $? in
+	0) ;;
+	1) herdr session delete "$name" >/dev/null 2>&1 ;;
+	*)
+		stderr "herdr のセッション一覧を取得できませんでした"
+		return 1
+		;;
+	esac
+	herdr --session "$name"
+}
+
+# 今いるセッションを終了する（中のシェルもすべて終了する）
+alias hss='herdr server stop'
+
+# pane を 4 分割する
+herdr_split() {
+	[ -n "$HERDR_PANE_ID" ] || return 1
+	local right
+	right=$(herdr pane split "$HERDR_PANE_ID" --direction right --no-focus | jq -er '.result.pane.pane_id') || return 1
+	herdr pane split "$right" --direction down --no-focus >/dev/null || return 1
+	herdr pane split "$HERDR_PANE_ID" --direction down --no-focus >/dev/null
 }
 
 # -----
@@ -363,26 +433,33 @@ tmux_split() {
 
 # プロジェクト名を取得する
 project_name() {
-	local path=$(find_up .bashrc_project)
+	local path=$(_find_project_file)
 	if [ -n "$path" ]; then
-		echo "$(basename $(dirname $(find_up .bashrc_project)))"
+		basename "$(dirname "$path")"
 	else
 		echo "home"
 	fi
 }
 
-# window の色と名前をローカルの設定にする
+# pane の色と tab の名前をローカルの設定にする
 local_window() {
 	color_black
-	[ -n "$TMUX" ] && tmux rename-window "$(project_name)"
+	tab_rename "$(project_name)"
 }
 
-# .bashrc_project を読み込む
+# .bashrc_project を読み込む（権限が 600 でなければ読み込まない）
 load_project() {
-	local path=$(find_up .bashrc_project)
-	if [ -n "$path" ]; then
+	local path=$(_find_project_file)
+	[ -n "$path" ] || return 0
+	# プロンプトごとに呼ばれるので、権限の警告は同じファイルにつき 1 回だけ出す
+	if is_file_permission "$path" 600; then
+		_PROJECT_WARNED=
 		source "$path"
+	elif [ "$_PROJECT_WARNED" != "$path" ]; then
+		_PROJECT_WARNED=$path
+		_check_600 "$path" # 警告を出すだけ
 	fi
+	return 0
 }
 
 # PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
@@ -493,10 +570,7 @@ __secret_decrypt() {
 		stderr "$SECRET_DATA_PATH にファイルがありません"
 		return 1
 	fi
-	if ! is_file_permission "$SECRET_DATA_PATH" 600; then
-		stderr "$SECRET_DATA_PATH の権限が 600 ではありません"
-		return 1
-	fi
+	_check_600 "$SECRET_DATA_PATH" || return 1
 
 	cat $SECRET_DATA_PATH | __decrypt $GPG_PASSWORD
 }
@@ -605,10 +679,20 @@ make_git_commit_message() {
 }
 
 # git switch
-gsw() {
-	git switch $(git branch --format='%(refname:short)' | fzf --query "$1" --select-1)
+# 旧版の alias sw=gsw が残ったシェルで apply すると、下の定義が gsw() になってしまうので外す（移行用。旧版のシェルが無くなったら消してよい）
+unalias sw 2>/dev/null
+sw() {
+	local selected branch worktree_dir
+	selected="$(git branch --format='%(refname:short)%09%(worktreepath)' |
+		fzf --query "$1" --select-1 --delimiter=$'\t' --nth=1)" || return
+	branch="${selected%%$'\t'*}"
+	worktree_dir="${selected#*$'\t'}"
+	if [[ -n "${worktree_dir}" ]]; then
+		cd "${worktree_dir}" # worktree にあるブランチなら、その worktree へ移動
+	else
+		git switch "${branch}" # どの worktree にも無いブランチなら、今いる worktree で switch
+	fi
 }
-alias sw=gsw
 
 # git switch -c
 gsc() {
@@ -770,8 +854,6 @@ dd() {
 # fzf
 # -----
 
-export FZF_DEFAULT_OPTS='--tmux'
-
 # https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.bash
 source ~/setup/scripts/key-bindings.sh
 
@@ -817,10 +899,6 @@ shopt -s globstar
 
 # .bashrc_local の権限をバリデーション
 BASHRC_LOCAL="$HOME/.bashrc_local"
-if [ -f "$BASHRC_LOCAL" ]; then
-	if is_file_permission "$BASHRC_LOCAL" 600; then
-		source "$BASHRC_LOCAL"
-	else
-		stderr "$BASHRC_LOCAL の権限が 600 ではありません"
-	fi
+if [ -f "$BASHRC_LOCAL" ] && _check_600 "$BASHRC_LOCAL"; then
+	source "$BASHRC_LOCAL"
 fi
