@@ -56,7 +56,7 @@ shfmt -w ~/setup/**/*.sh
 ## 編集時に重要な規約
 
 - **プライベートヘルパーは `_` または `__` を接頭辞に持つ**（例: `__decrypt`・`_gw_repo_root`・`_trash_check`）。直接呼ぶことを想定していない。
-- **`llm` エイリアス**は `claude_code`（hooks/MCP/slash-commands を無効化したヘッドレスな `claude -p` 呼び出し）を指す。いくつかの git 関数は diff を `llm` にパイプする ── `gcm`（コミットメッセージ生成）・`g_code_review`・`make_git_commit_message`。`HAIKU`/`SONNET` などのモデル名は `.bashrc` の llm セクション先頭にあるので、そこで更新する。
+- **`llm` エイリアス**は `claude_code`（hooks/MCP/slash-commands を無効化したヘッドレスな `claude -p` 呼び出し）を指す。いくつかの git 関数は diff を `llm` にパイプする ── `gcm`（コミットメッセージ生成）・`g_code_review`・`make_git_commit_message`。モデル名は各関数の中で直接指定している（`claude -p` には `haiku`・`sonnet` などの別名、`anthropic_api` には API のモデル ID）。
 - **秘密情報マネージャ**（`secret_add`/`secret_get`、`.bashrc`）: `$SECRET_DATA_PATH`（`~/.secret_data.gpg`）にある GPG 対称暗号化された単一ファイルで、スペース区切りの `key value` 行をキーにする。`$GPG_PASSWORD`（`secret_init` で設定）が必要で、データファイルには `600` を強制する。`anthropic_api` はここから `anthropic` キーを読む。
 - **`trash` は概念上 `rm` を置き換える**: ファイルは `~/trash` に移動し、30 日後に物理削除される（`trash.sh` がシェル起動時に整理する）。破壊的操作では `rm` より `trash` を優先し、親ディレクトリに書き込めない場合は `sudo_trash` を使う。
 - **`csv_*` 関数**は標準入力から CSV を読む薄い `python3 -c` ラッパーで、パイプで合成できる（例: `cat data.csv | csv_grep name 太郎 | csv_cut name city`）。すべて `SIGPIPE` をデフォルトに設定し、パイプライン中でも正しく動作する。

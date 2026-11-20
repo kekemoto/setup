@@ -42,8 +42,11 @@ autocmd InsertLeave * set nopaste
 autocmd! InsertEnter * call feedkeys("\<Cmd>noh\<cr>" , 'n')
 
 " WSL で、ヤンクでクリップボードにコピー
+" WSL 以外（ssh 先など）では OSC 52 で端末経由でクリップボードに送る（tmux 内なら set-clipboard on が必要）
 if system('uname -a | grep WSL') != ''
   autocmd TextYankPost * :call system('clip.exe', @")
+elseif has('nvim-0.10')
+  autocmd TextYankPost * lua require('vim.ui.clipboard.osc52').copy('+')(vim.v.event.regcontents)
 endif
 
 " 外部コマンドがエラーの時だけ、画面分割して出力するヘルパー
