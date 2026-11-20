@@ -16,7 +16,7 @@ export LESS='-M -R -F -X'
 # プロンプト
 # -----
 
-__prompt_git_branch_name(){
+__prompt_git_branch_name() {
 	local branch=$(git branch --show-current 2>/dev/null)
 	if [ -n "$branch" ]; then
 		echo " $branch"
@@ -29,7 +29,7 @@ PS1="\n\u \[\033[32m\]\h\[\033[0m\] \D{%F %T}\[\033[33m\]\$(__prompt_git_branch_
 # エイリアス
 # -----
 
-alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
+alias apply='(cd ~/setup && ./install.sh) && . ~/.bashrc'
 alias bashrc='nvim ~/setup/.bashrc && apply'
 alias bashlo='nvim ~/.bashrc_local && _check_600 ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
@@ -44,7 +44,7 @@ alias cl='claude'
 alias clc='claude --continue'
 alias clr='claude --resume'
 
-# bin/ の ssher・sudoer（sudoer から ssher を spawn できるよう、alias ではなく PATH に入れる）
+# bin/ の yank・ssher・sudoer（sudoer から ssher を spawn できるよう、alias ではなく PATH に入れる）
 case ":$PATH:" in *":$HOME/setup/bin:"*) ;; *) export PATH="$HOME/setup/bin:$PATH" ;; esac
 
 # -----
@@ -58,7 +58,11 @@ setup() {
 setup_fmt() {
 	if command -v shfmt >/dev/null; then
 		# shfmt -f はシバンで判定して、拡張子の無い bin/ssher なども拾う。key-bindings.sh は fzf のファイルなので整形しない
-		shfmt -f ~/setup | grep -v key-bindings.sh | xargs -r -d '\n' shfmt -w
+		# .bashrc は拡張子もシバンも無いので -f では拾われない。明示的に足す
+		{
+			shfmt -f ~/setup | grep -v key-bindings.sh
+			echo ~/setup/.bashrc
+		} | xargs -r -d '\n' shfmt -w
 	fi
 }
 
@@ -183,68 +187,6 @@ mise_upgrade() {
 	mise upgrade
 }
 
-# 標準出力の内容をクリップボードに
-yank() {
-	if is_wsl; then
-		iconv -t cp932 | clip.exe
-	else
-		stderr "非対応です"
-	fi
-}
-
-# rg で検索し、置換する
-rgsed() {
-	local query=$1
-	local replace=$2
-
-	if [ -z "$query" ]; then
-		stderr "検索文字列が設定されてません"
-		return 1
-	fi
-	if [ -z "$replace" ]; then
-		stderr "置換文字列が設定されてません"
-		return 1
-	fi
-
-	mapfile -t results < <(rg --vimgrep "$query")
-	for line in "${results[@]}"; do
-		_rgsed "$line"
-	done
-}
-
-_rgsed() {
-	local line=$1 file lineno text action
-
-	# 検索結果のパース（file:lineno:column:text）
-	IFS=: read -r file lineno _ text <<<"$line"
-
-	# 結果の表示
-	echo "======"
-	echo "$file : $lineno"
-	echo "$text"
-
-	# 操作の選択
-	echo "------"
-	echo "r: 置換"
-	echo "n: 次へ"
-	echo "e: エディターで開く"
-	read -p "入力: " action
-
-	case $action in
-	r)
-		sed -i "${lineno}s|$query|$replace|" "$file"
-		;;
-	n) ;;
-	e)
-		nvim +$lineno "$file"
-		_rgsed "$line"
-		;;
-	*)
-		_rgsed "$line"
-		;;
-	esac
-}
-
 # 標準入力のファイル一覧を nvim のタブで開く（引数は nvim に渡す。例: nvimp +/pattern）
 nvimp() {
 	xargs -r nvim -p "$@"
@@ -333,7 +275,7 @@ claude_code() {
 if command -v ollama >/dev/null; then
 	alias ollama_log="less ~/ollama.log"
 
-	ollama_cli(){
+	ollama_cli() {
 		local model=${1:-'gemma3:4b'}
 		ollama run "$model"
 	}
@@ -359,6 +301,7 @@ _pane_color() {
 }
 # 旧版の alias color_* が残ったシェルで apply すると、下の関数定義が壊れるので外す（移行用。旧版のシェルが無くなったら消してよい）
 unalias color_red color_green color_black 2>/dev/null
+unset -f yank 2>/dev/null # 関数から bin/yank に移したので、開いたままのシェルに残った古い関数を消す
 color_red() { _pane_color "#350000"; }
 color_green() { _pane_color "#003500"; }
 color_black() { _pane_color; }
@@ -390,24 +333,35 @@ _tab_autoname_error() {
 # --system-prompt で役割を固定する（画面に映った文章を自分への依頼と取り違えて返答しないように）
 # 応答しないコマンドでループ全体が止まらないよう、外部コマンドには timeout を付ける
 tab_autoname() {
-	local tab=${1:-$HERDR_TAB_ID} if_changed=$2 list panes pane read screen="" unread="" label reply name
+	local tab=${1:-$HERDR_TAB_ID} if_changed=$2 list panes pane read screen="" unread="" tabs label reply name
 	local sum_dir="$HERDR_SOCKET_PATH.autoname.d"
 	if [ -z "$tab" ]; then
 		_tab_autoname_error "tab を指定してください（herdr の外では HERDR_TAB_ID がありません）"
 		return 1
 	fi
-	if ! list=$(timeout 10 herdr pane list); then
+	if ! tabs=$(timeout 10 herdr tab list) || ! list=$(timeout 10 herdr pane list); then
 		_tab_autoname_error "herdr のセッションに接続できませんでした"
 		return 1
 	fi
+	# 今の名前を取る。jq -e は出力が無い（tab が一覧に無い）と 4 を返す
+	label=$(jq -er --arg t "$tab" 'first(.result.tabs[] | select(.tab_id == $t)) | .label // ""' <<<"$tabs")
+	case $? in
+	0) ;;
+	4)
+		# ループから呼んだときは、途中で閉じられた tab なのでエラーにしない
+		[ "$if_changed" = --if-changed ] && return 0
+		_tab_autoname_error "tab $tab が見つかりません（ID は w1:t2 の形式）"
+		return 1
+		;;
+	*)
+		_tab_autoname_error "$tab: herdr tab list の出力を読めませんでした"
+		return 1
+		;;
+	esac
 	panes=$(jq -er --arg t "$tab" '[.result.panes[] | select(.tab_id == $t) | .pane_id] | join(" ")' <<<"$list") || {
 		_tab_autoname_error "$tab: herdr pane list の出力を読めませんでした"
 		return 1
 	}
-	if [ -z "$panes" ]; then
-		_tab_autoname_error "tab $tab が見つかりません（w1:t2 の形式で指定してください）"
-		return 1
-	fi
 	# 読めて中身のある pane だけを集める
 	for pane in $panes; do
 		read=$(timeout 10 herdr pane read "$pane" --source recent --lines 80) || {
@@ -428,7 +382,6 @@ $read
 		echo "$tab: 中身のある pane が無いので付けません"
 		return 0
 	fi
-	label=$(timeout 10 herdr tab list | jq -r --arg t "$tab" '.result.tabs[] | select(.tab_id == $t) | .label // empty')
 	# --if-changed（ループから呼ぶとき）は、名前と画面が前回付けたときのままなら付け直さない
 	# （名前が毎回揺れるのと、無駄な呼び出しを防ぐ。名前も比べるので、手で名前を変えた tab や ID が再利用された tab は付け直す）
 	if [ "$if_changed" = --if-changed ] && [ "$(cat "$sum_dir/$tab" 2>/dev/null)" = "$(cksum <<<"$label$screen")" ]; then
@@ -477,12 +430,14 @@ _tab_autoname_all() {
 	wait
 }
 
-# 一定間隔（既定 600 秒）ごとに _tab_autoname_all を繰り返す。herdr のセッション（ソケット）が無くなったら終わる
+# 600 秒ごとに _tab_autoname_all を繰り返す。herdr のセッション（ソケット）が無くなったら終わる
 # change_window などで手で付けた tab 名も上書きする
+# 失敗の理由はログ $1 に書く（毎回開き直すので手で消されても作り直される。1MB を超えたら .1 に退避する）
 _tab_autoname_loop() {
-	local interval=${1:-600}
-	while sleep "$interval" && [ -S "$HERDR_SOCKET_PATH" ]; do
-		_tab_autoname_all
+	local log=$1
+	while sleep 600 && [ -S "$HERDR_SOCKET_PATH" ]; do
+		[ "$(stat -c %s "$log" 2>/dev/null || echo 0)" -le 1048576 ] || mv -f "$log" "$log.1" 2>>"$log"
+		_tab_autoname_all 2>>"$log" # mv のあとで開き直すので、新しいログに書く
 	done
 }
 
@@ -493,33 +448,57 @@ _tab_autoname_start() {
 	( (
 		trap '' HUP
 		cd ~ || exit # 起動したディレクトリ（worktree など）が消えても動き続けられるように
-		# Claude Code の中のシェルから起動された場合でも、その環境変数を claude -p に引き継がない
-		unset "${!CLAUDE@}"
+		# Claude Code の中のシェルから起動された場合でも、そのセッションの環境変数を claude -p に引き継がない
+		# （CLAUDE_CONFIG_DIR などログインに使う変数は残す）
+		local v
+		for v in "${!CLAUDE@}"; do
+			case $v in CLAUDE_CONFIG_DIR | CLAUDE_CODE_OAUTH_TOKEN | CLAUDE_CODE_USE_*) ;; *) unset "$v" ;; esac
+		done
 		flock -n 9 || exit 0
 		umask 077 # ログには画面から作った名前が入るので、自分だけが読めるようにする
-		# 名前を付けられなかった理由をログに残す。前回のループのログは .1 に退避する
-		mv -f "$HERDR_SOCKET_PATH.autoname.log" "$HERDR_SOCKET_PATH.autoname.log.1"
-		exec 2>"$HERDR_SOCKET_PATH.autoname.log"
-		_tab_autoname_loop
+		_tab_autoname_loop "$HERDR_SOCKET_PATH.autoname.log"
 	) 9>"$HERDR_SOCKET_PATH.autoname.lock" >/dev/null 2>&1 &)
 }
 
+# 新しく起動した herdr のワークスペースに label $2 を付ける（API が応答するまで最大 10 秒待つ）
+# 1 つだけで、その pane が dir $1 で開いているときに限る（復元されたほかのワークスペースの名前を変えないように）
+_herdr_label_new_workspace() {
+	local dir=$1 label=$2 i id
+	for ((i = 0; i < 50; i++)); do
+		sleep 0.2
+		id=$(herdr workspace list 2>/dev/null | jq -er '.result.workspaces | select(length == 1) | .[0].workspace_id') || continue
+		# pane の cwd がまだ届いていないこともあるので、合うまで待つ
+		herdr pane list | jq -e --arg w "$id:" --arg d "$dir" 'any(.result.panes[]; (.pane_id | startswith($w)) and .cwd == $d)' || continue
+		herdr workspace rename "$id" "$label"
+		return
+	done
+}
+
 # プロジェクトのワークスペースに入る。label のワークスペースに切り替える（無ければ dir で作る）
-# herdr の外から呼んだときは、そのあと herdr に入る。サーバーが動いていなければ dir で herdr を起動する
-# label を省略すると dir の名前を使う
+# herdr の外から呼んだときは、動いているセッションに入る（複数あれば fzf で選ぶ）。1 つも無ければ dir で herdr を起動する
+# label を省略すると dir の名前を使う（herdr を新しく起動したときも付ける）
 # 例: herdr_workspace ~/work/MoppyBaito moppy
 herdr_workspace() {
-	local dir list id
+	local dir list id session="" json running row is_default
+	local -a args
 	dir=$(realpath -e -- "${1:-.}") || return # 相対パスでも名前と作業ディレクトリが正しくなるように（無いディレクトリはエラー）
 	local label=${2:-${dir##*/}}
-	if ! list=$(herdr workspace list 2>/dev/null); then
-		# herdr の中なら入れ子に起動しない（一時的に応答しなかっただけのこともある）
-		if [ -n "$HERDR_PANE_ID" ]; then
-			stderr "herdr のワークスペース一覧を取得できませんでした"
-			return 1
+	# herdr の外では HERDR_SOCKET_PATH が無く、herdr は default セッションに繋ぐので、動いているセッションを選んでそのソケットを使う
+	if [ -z "$HERDR_PANE_ID" ]; then
+		json=$(herdr session list --json) || return # 失敗を「動いているセッションが無い」と取り違えないよう、先に受ける
+		running=$(jq -r '.sessions[] | select(.running) | "\(.name)\t\(.default)\t\(.socket_path)"' <<<"$json") || return
+		if [ -z "$running" ]; then
+			(_herdr_label_new_workspace "$dir" "$label" >/dev/null 2>&1 &) # 起動した herdr のワークスペースに裏で label を付ける
+			(cd "$dir" && herdr) # herdr を抜けたあと、呼び出したシェルは元のディレクトリのまま
+			return
 		fi
-		(cd "$dir" && herdr) # herdr を抜けたあと、呼び出したシェルは元のディレクトリのまま
-		return
+		row=$(fzf --select-1 --prompt="session> " --delimiter='\t' --with-nth=1 <<<"$running") || return 0 # 1 つだけなら選ばずに入る
+		local -x HERDR_SOCKET_PATH # 選んだセッションのソケットは、この関数の中だけで使う
+		IFS=$'\t' read -r session is_default HERDR_SOCKET_PATH <<<"$row"
+	fi
+	if ! list=$(herdr workspace list 2>/dev/null); then
+		stderr "herdr のワークスペース一覧を取得できませんでした"
+		return 1
 	fi
 	id=$(jq -r --arg l "$label" 'first(.result.workspaces[] | select(.label == $l) | .workspace_id) // empty' <<<"$list") || return
 	if [ -n "$id" ]; then
@@ -527,7 +506,11 @@ herdr_workspace() {
 	else
 		herdr workspace create --cwd "$dir" --label "$label" --focus >/dev/null
 	fi || return
-	[ -n "$HERDR_PANE_ID" ] || herdr
+	# default セッションは名前で指定せず、素の herdr で入る（--session default だと別の名前付きセッションになるおそれがある）
+	if [ -n "$session" ]; then
+		[ "$is_default" = true ] || args=(--session "$session")
+		env -u HERDR_SOCKET_PATH herdr "${args[@]}" # 選んだセッションは引数で指定するので、ソケットの変数は渡さない
+	fi
 }
 
 # pane を 4 分割する
@@ -621,17 +604,19 @@ beep_bad() { _beep 831 622 622 622 554 494 440; }
 
 export SECRET_DATA_PATH="$HOME/.secret_data.gpg"
 
-# 標準入力を gpg で暗号化して標準出力する
-# gpg_passphrease : gpg で使うパスワード
-__encrypt() {
-	gpg --batch --passphrase $1 --symmetric
+# パスワード $1 で gpg を実行する（ps に見えないよう、引数ではなく fd 3 で渡す）。残りの引数は gpg に渡す
+# gpg-agent にパスワードを覚えさせない（間違ったパスワードでも、覚えたもので復号できてしまい、そのまま再暗号化されるので）
+__gpg() {
+	local pass=$1
+	shift
+	gpg --batch --pinentry-mode loopback --no-symkey-cache --passphrase-fd 3 "$@" 3<<<"$pass"
 }
 
-# 標準入力を gpg で復号化して標準出力する
-# gpg_passphrease : gpg で使うパスワード
-__decrypt() {
-	gpg --batch --passphrase $1 --quiet --decrypt
-}
+# 標準入力をパスワード $1 で暗号化して標準出力する
+__encrypt() { __gpg "$1" --symmetric; }
+
+# 標準入力をパスワード $1 で復号化して標準出力する
+__decrypt() { __gpg "$1" --quiet --decrypt; }
 
 # 標準入力を暗号化して $SECRET_DATA_PATH に出力
 __secret_encrypt() {
@@ -663,7 +648,7 @@ __secret_decrypt() {
 	fi
 	_check_600 "$SECRET_DATA_PATH" || return 1
 
-	cat $SECRET_DATA_PATH | __decrypt $GPG_PASSWORD
+	__decrypt "$GPG_PASSWORD" <"$SECRET_DATA_PATH"
 }
 
 secret_init() {
@@ -680,18 +665,30 @@ secret_add() {
 	fi
 	local key=$1
 	local secret=$2
-
-	if [ ! -e "$SECRET_DATA_PATH" ]; then
-		echo "$key $secret" | __secret_encrypt
-		return
+	# キーは行の最初の単語として探すので、空白を含められない。秘密も 1 行に収まるものだけ
+	if [[ -z $key || $key =~ [[:space:]] ]]; then
+		stderr "キーは空白を含まない文字列にしてください。"
+		return 1
+	fi
+	if [[ -z $secret ]]; then # 空だと、同じキーの古い秘密を消すだけになる
+		stderr "秘密が空です。"
+		return 1
+	fi
+	if [[ $secret == *$'\n'* || $secret == [[:blank:]]* ]]; then # 先頭の空白は secret_get でキーとの区切りとして外れる
+		stderr "改行を含む秘密や、空白で始まる秘密は保存できません（base64 などにしてください）。"
+		return 1
 	fi
 
 	# 復号に失敗したまま書き込むと既存の秘密が消えるので、失敗したら中止する
-	local value
-	value=$(__secret_decrypt) || return 1
-	value+="
-$key $secret"
-	echo "$value" | __secret_encrypt
+	# 同じキーの古い行は消して置き換える
+	local value=""
+	if [ -e "$SECRET_DATA_PATH" ]; then
+		value=$(__secret_decrypt) || return 1
+	fi
+	{
+		K=$key awk 'NF && $1 "" != ENVIRON["K"]' <<<"$value" # 空行は残さない
+		echo "$key $secret"
+	} | __secret_encrypt
 }
 
 # 秘密情報を取得
@@ -699,7 +696,11 @@ $key $secret"
 secret_get() {
 	local key=${1:-default}
 
-	local value=$(__secret_decrypt | awk -v key="$key" '$1 == key {print $2; exit}')
+	# 値はキーの後ろの残り全部（空白を含んでもよい）。古い形式で同じキーが複数あるときは最後の行を使う
+	# キーは ENVIRON で渡す（-v だと \ が解釈される）。"" を付けて数値ではなく文字列で比べる
+	local value
+	value=$(__secret_decrypt) || return 1
+	value=$(K=$key awk '$1 "" == ENVIRON["K"] && sub(/^[ \t]*[^ \t]+[ \t]+/, "") {v = $0} END {print v}' <<<"$value")
 
 	if [ -z "$value" ]; then
 		stderr "秘密情報が見つかりませんでした。"

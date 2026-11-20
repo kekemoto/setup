@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# 標準入力をクリップボードにコピーする（WSL 用。シェルと nvim のヤンクから使う）
+# clip.exe は BOM 付き UTF-16LE なら絵文字なども化けずに受け取れる。UTF-8 として不正なバイトは飛ばす（途中で止まらないように）
+if ! command -v clip.exe >/dev/null; then
+	echo "非対応です（clip.exe がありません）" >&2
+	exit 1
+fi
+{
+	printf '\377\376'
+	iconv -c -f UTF-8 -t UTF-16LE
+} | clip.exe

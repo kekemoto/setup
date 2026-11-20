@@ -23,7 +23,7 @@ cd ~/setup && ./install.sh
 `.bashrc` には通常の編集・テストループとなる `apply` エイリアスが定義されている:
 
 ```bash
-apply   # = cd ~/setup && ./install.sh && cd - && . ~/.bashrc
+apply   # = (cd ~/setup && ./install.sh) && . ~/.bashrc
 ```
 
 編集用エイリアス（`bashrc`・`vimrc`・`herdrrc`・`installrc`）は `$HOME/setup` 内の対応するソースファイルを開き、保存後に `apply` を実行する。したがって編集は**このリポジトリ内のファイル**に対して行い、`$HOME` に展開済みのコピーには決して触れないこと。
@@ -53,7 +53,7 @@ setup_fmt
 
 対話シェルの起動の最後に、ゴミ箱の整理・ollama の起動と、herdr の中なら tab 名を自動で付けるループ（`_tab_autoname_start`。10 分ごとに各 tab の画面の内容を Claude Haiku に送って名前を付ける）をセッションごとに 1 つ起動する。
 
-`bin/` には（ソースされず、`.bashrc` で PATH に入る）スタンドアロン実行ファイルが 2 つある: `ssher`（複数の SSH ホストで同一コマンドを実行）と `sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー。`expect` は install.sh では入れないので、使うなら apt などで入れる）。
+`bin/` には（ソースされず、`.bashrc` で PATH に入る）スタンドアロン実行ファイルが 3 つある: `yank`（標準入力を WSL のクリップボードへコピー。nvim のヤンクからも呼ぶ）、`ssher`（複数の SSH ホストで同一コマンドを実行）と `sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー。`expect` は install.sh では入れないので、使うなら apt などで入れる）。
 
 ## 編集時に重要な規約
 

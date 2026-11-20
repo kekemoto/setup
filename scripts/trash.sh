@@ -27,7 +27,7 @@ trash() {
 	local f base target rc=0 opts_done=0
 	for f in "$@"; do
 		# オプション(-rf 等)はスキップ。ファイルとして扱わない（-- より後ろは - で始まってもファイル）
-		if ((!opts_done)); then
+		if ((! opts_done)); then
 			case "$f" in
 			--) opts_done=1 && continue ;;
 			-*) continue ;;
