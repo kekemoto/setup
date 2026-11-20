@@ -1,42 +1,45 @@
 #!/usr/bin/env expect
-# usage: sudoer <command> [args...]
-#   例) sudoer ~/setup/bin/ssher -c "sudo hostname" -h hosts.txt -t
+# 使い方: sudoer <コマンド> [引数...]
+#   例) sudoer ssher -c "sudo hostname" -h hosts.txt -t
 
 set timeout -1
 
 if {$argc < 1} {
-    puts "Usage: $argv0 <command> [args...]"
+    puts "使い方: $argv0 <コマンド> [引数...]"
     exit 1
 }
 
 # パスワード入力（非表示）
-puts -nonewline "sudo password (will not echo): "
+puts -nonewline "sudo のパスワード（表示されません）: "
 flush stdout
 exec /bin/stty -echo
 gets stdin pw
 exec /bin/stty echo
 puts ""
 
-# --- 修正版: -- を削除 ---
-# (古い expect では spawn -noecho -- ... がエラーになる)
+# 古い expect では spawn -noecho -- ... がエラーになるので -- は付けない
 spawn -noecho {*}$argv
 
 # sudo プロンプト検出と応答
+# （timeout -1 なので、終わるまで待ち続ける）
 expect {
-    -re {\[sudo\].*パスワード:} {
-        send -- "$pw\r"
-        exp_continue
+    -re {(?n)Sorry, try again|もう一度試してください} {
+        # 間違ったパスワードを何度も送らない（ホストごとに失敗が重なってアカウントがロックされるのを防ぐ）
+        puts "\nsudoer: パスワードが違います。中止します"
+        exit 1
     }
-    -re {\[sudo\].*password:|[Pp]assword for .*:} {
+    -re {(?n)(\[sudo\].*(パスワード|password)|[Pp]assword for [^:]*): ?$} {
         send -- "$pw\r"
         exp_continue
     }
     eof {}
-    timeout {
-        puts "timeout during command execution"
-    }
 }
 
-set pw ""
-exit 0
+# 実行したコマンドの終了コードをそのまま返す
+# （シグナルで死んだときは 1 番目の追加要素が CHILDKILLED になる。OS のエラーのときは 3 番目が -1 になる）
+lassign [wait] - - os_error code child_status
+if {$os_error == -1 || $child_status eq "CHILDKILLED"} {
+    exit 1
+}
+exit $code
 

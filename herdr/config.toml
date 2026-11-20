@@ -3,7 +3,3 @@ onboarding = false
 [theme]
 name = "one-dark"
 auto_switch = false
-
-[ui]
-# Windows Terminal のタブ名を herdr で上書きしない（mop などが起動前に設定したタブ名を残す）
-window_title = ""

@@ -5,12 +5,14 @@
 # 使い方:
 #   ssher -c "実行コマンド" -h "ホストリスト"
 #   ssher -c "実行コマンド" -h /path/to/hosts.txt
+#   ssher -c "sudo 実行コマンド" -h "ホストリスト" -t
 #
 # 引数:
 #   -c : 各ホストで実行するコマンド（必須）
 #   -h : 接続先ホストリスト（必須）
 #        ・1行1ホストのファイルパス
 #        ・またはスペース／改行区切りのホスト名文字列
+#   -t : ssh に -t を付けて端末を割り当てる（sudo のパスワード入力などで使う。sudoer と組み合わせる）
 #
 # 例:
 #   ssher -c "uptime" -h "./hosts.txt"
@@ -27,29 +29,23 @@ set -euo pipefail
 
 cmd=""
 hosts_input=""
-tty=""
+ssh_opts=()
 
-# --- 引数のパース ---
-while [[ $# -gt 0 ]]; do
-	case "$1" in
-	-c)
-		cmd="$2"
-		shift 2
-		;;
-	-h)
-		hosts_input="$2"
-		shift 2
-		;;
-	-t)
-		tty="-t"
-		shift 1
-		;;
-	*)
-		echo "不明な引数: $1" >&2
-		exit 1
-		;;
+# --- 引数のパース（値の付け忘れや不明なオプションは getopts がエラーにする）---
+while getopts c:h:t opt; do
+	case "$opt" in
+	c) cmd=$OPTARG ;;
+	h) hosts_input=$OPTARG ;;
+	t) ssh_opts=(-t) ;;
+	*) exit 1 ;;
 	esac
 done
+# ホストを引用符で囲み忘れた（-h web001 web002）などで余った引数があれば止める
+shift $((OPTIND - 1))
+if [[ $# -ne 0 ]]; then
+	echo "エラー: 不明な引数: $*（複数のホストは -h \"web001 web002\" のように引用符で囲む）" >&2
+	exit 1
+fi
 
 # --- 必須チェック ---
 if [[ -z "$cmd" ]]; then
@@ -65,21 +61,27 @@ fi
 # --- ホストリストの解決 ---
 hosts=()
 if [[ -f "$hosts_input" ]]; then
-	# ファイルの場合
-	mapfile -t hosts < <(grep -v '^[[:space:]]*$' "$hosts_input")
+	# ファイルの場合（CRLF・# のコメント行・前後の空白も扱う）
+	read -r -d '' -a hosts < <(tr -d '\r' <"$hosts_input" | sed 's/#.*//') || true
 else
-	# 文字列の場合（スペース・改行どちらでもOK）
-	IFS=' ' read -r -a hosts <<<"$(echo "$hosts_input" | tr '\n' ' ')"
+	# 文字列の場合（スペース・改行どちらでもOK。既定の IFS で両方を区切る）
+	read -r -d '' -a hosts <<<"$hosts_input" || true
+fi
+
+if [[ ${#hosts[@]} -eq 0 ]]; then
+	echo "エラー: 接続先のホストがありません" >&2
+	exit 1
 fi
 
 # --- 実行 ---
+# 1 台が失敗しても残りのホストは続け、1 台でも失敗したら最後に 1 で終わる
+rc=0
 for host in "${hosts[@]}"; do
-	[[ -z "$host" ]] && continue
 	echo "=== $host ==="
-	if [[ -n "$tty" ]]; then
-		ssh -t "$host" "$cmd"
-	else
-		ssh "$host" "$cmd"
-	fi
+	ssh "${ssh_opts[@]}" "$host" "$cmd" || {
+		echo "!!! $host: 終了コード $?" >&2
+		rc=1
+	}
 	echo
 done
+exit "$rc"

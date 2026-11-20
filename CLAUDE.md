@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd ~/setup && ./install.sh
 ```
 
-`.bashrc`・`herdr/config.toml`（`~/.config/herdr/` へ）・`nvim/` を `$HOME` にコピーし（既存コピーは上書き）、`mise` でツールチェインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
+`.bashrc` を `$HOME` へ、`herdr/`・`nvim/` を `~/.config/` 配下へコピーし（同名ファイルは上書き。リポジトリで消したファイルは展開先に残る）、`mise` でツールチェインをインストールし、git の config/alias を設定し、vim-plug と git-completion を導入する。アンインストール手段はない。
 
 旧環境から移行する場合は `uninstall_asdf.sh` で既存の asdf を削除できる（削除前に asdf 管理下のツール一覧を表示し、`~/.tool-versions` はバックアップとして退避する）。
 
@@ -26,14 +26,14 @@ cd ~/setup && ./install.sh
 apply   # = cd ~/setup && ./install.sh && cd - && . ~/.bashrc
 ```
 
-編集用エイリアス（`bashrc`・`vimrc`・`herdrrc`・`install`）は `$HOME/setup` 内の対応するソースファイルを開き、保存後に `apply` を実行する。したがって編集は**このリポジトリ内のファイル**に対して行い、`$HOME` に展開済みのコピーには決して触れないこと。
+編集用エイリアス（`bashrc`・`vimrc`・`herdrrc`・`installrc`）は `$HOME/setup` 内の対応するソースファイルを開き、保存後に `apply` を実行する。したがって編集は**このリポジトリ内のファイル**に対して行い、`$HOME` に展開済みのコピーには決して触れないこと。
 
 ## フォーマット
 
-シェルスクリプトは `shfmt` で整形する（インデントはタブ ── 既存ファイルに合わせる）。`setup_fmt` bash 関数経由、または直接実行する:
+シェルスクリプトは `shfmt` で整形する（インデントはタブ ── 既存ファイルに合わせる）。`setup_fmt` bash 関数を使う（fzf 由来の `scripts/key-bindings.sh` は除外する）:
 
 ```bash
-shfmt -w ~/setup/**/*.sh
+setup_fmt
 ```
 
 `shfmt` は `install.sh` ではインストールされない（`mise_add shfmt` で追加する）。`setup_fmt` は `shfmt` が無ければ何もしない。
@@ -47,24 +47,26 @@ shfmt -w ~/setup/**/*.sh
 - `scripts/trash.sh` ── `trash` / `sudo_trash`（後述）
 - `scripts/git_worktree.sh` ── `gw*` git-worktree ヘルパー
 
-ローカル用・git 管理外の 2 つのエスケープハッチが最後にソースされ、ソース前に `600` 権限を検証する:
-- `~/.bashrc_local` ── マシン固有の設定（`bashlo` で編集）
-- `~/.bashrc_project` ── プロジェクト単位の設定。ディレクトリツリーを遡って探索し（`find_up`。git worktree 内で見つからなければメインの worktree から探す）、`PROMPT_COMMAND='load_project'` によりプロンプトごとに再ソースされる。最も近いものを `bashpr` で編集する。
+ローカル用・git 管理外の 2 つのエスケープハッチがあり、どちらもソース前に `600` 権限と所有者が自分であることを検証する（`_check_600`）:
+- `~/.bashrc_local` ── マシン固有の設定（`bashlo` で編集）。`.bashrc` の終わり近く（対話シェルの起動処理の直前）でソースされる
+- `~/.bashrc_project` ── プロジェクト単位の設定。起動時には読まれず、ディレクトリツリーを遡って探索し（`find_up`。git worktree 内で見つからなければメインの worktree から探す）、`PROMPT_COMMAND='load_project'` によりプロンプトごとに再ソースされる（探索結果はディレクトリごとに覚え、移動したときだけ探し直す）。最も近いものを `bashpr` で編集する。
 
-`bin/` には（ソースされない）スタンドアロン実行ファイルが 2 つある: `ssher`（複数の SSH ホストで同一コマンドを実行）と `sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー）。
+対話シェルの起動の最後に、ゴミ箱の整理・ollama の起動と、herdr の中なら tab 名を自動で付けるループ（`_tab_autoname_start`。10 分ごとに各 tab の画面の内容を Claude Haiku に送って名前を付ける）をセッションごとに 1 つ起動する。
+
+`bin/` には（ソースされず、`.bashrc` で PATH に入る）スタンドアロン実行ファイルが 2 つある: `ssher`（複数の SSH ホストで同一コマンドを実行）と `sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー。`expect` は install.sh では入れないので、使うなら apt などで入れる）。
 
 ## 編集時に重要な規約
 
 - **プライベートヘルパーは `_` または `__` を接頭辞に持つ**（例: `__decrypt`・`_gw_repo_root`・`_trash_check`）。直接呼ぶことを想定していない。
-- **`llm` エイリアス**は `claude_code`（hooks/MCP/slash-commands を無効化したヘッドレスな `claude -p` 呼び出し）を指す。いくつかの git 関数は diff を `llm` にパイプする ── `gcm`（コミットメッセージ生成）・`g_code_review`・`make_git_commit_message`。モデル名は各関数の中で直接指定している（`claude -p` には `haiku`・`sonnet` などの別名、`anthropic_api` には API のモデル ID）。
+- **`llm` エイリアス**は `claude_code`（hooks/MCP/slash-commands を無効化したヘッドレスな `claude -p` 呼び出し）を指す。いくつかの git 関数は diff を `llm` にパイプする ── `make_git_commit_message`（`gcm` が使うコミットメッセージ生成）・`g_code_review`。モデル名は各関数の中で直接指定している（`claude -p` には `haiku`・`sonnet` などの別名、`anthropic_api` には API のモデル ID）。
 - **秘密情報マネージャ**（`secret_add`/`secret_get`、`.bashrc`）: `$SECRET_DATA_PATH`（`~/.secret_data.gpg`）にある GPG 対称暗号化された単一ファイルで、スペース区切りの `key value` 行をキーにする。`$GPG_PASSWORD`（`secret_init` で設定）が必要で、データファイルには `600` を強制する。`anthropic_api` はここから `anthropic` キーを読む。
-- **`trash` は概念上 `rm` を置き換える**: ファイルは `~/trash` に移動し、30 日後に物理削除される（`trash.sh` がシェル起動時に整理する）。破壊的操作では `rm` より `trash` を優先し、親ディレクトリに書き込めない場合は `sudo_trash` を使う。
+- **`trash` は概念上 `rm` を置き換える**: ファイルは `~/trash` に移動し、30 日後に物理削除される（対話シェルの起動時に `.bashrc` が `_trash_purge` で整理する）。破壊的操作では `rm` より `trash` を優先し、親ディレクトリに書き込めない場合は `sudo_trash` を使う。
 - **`csv_*` 関数**は標準入力から CSV を読む薄い `python3 -c` ラッパーで、パイプで合成できる（例: `cat data.csv | csv_grep name 太郎 | csv_cut name city`）。すべて `SIGPIPE` をデフォルトに設定し、パイプライン中でも正しく動作する。
-- **git worktree** は `$GW_ROOT/<repo>/<branch>`（デフォルト `~/worktrees`）配下に作られる。`gwc` で作成/アタッチ、`gws` で fzf 切り替え、`gwd` で削除（メインのチェックアウトは削除から保護される）。
+- **git worktree** の補助: `gws` で fzf 切り替え、`gwd` で削除（メインのチェックアウトは削除から保護される）。
 
 ## ツールチェインのバージョン
 
-`install.sh` の `mise use --global` で導入: python・neovim・herdr・node・jq・fzf・fd・ripgrep（いずれも `@latest` 指定で最新安定版を取得）。多くの bash 関数は `fzf`・`fd`・`rg`・`jq`・`nvim`（`$EDITOR`）の存在を前提にしている。依存を追加するときは、`install.sh` の `mise use` 行に追記すること（バージョンを固定したい場合は `@latest` を具体的なバージョンに置き換える）。
+`install.sh` の `mise use --global` で導入: python・neovim（aqua 版）・herdr・node・jq・fzf・fd・ripgrep・uv・mycli（pipx 経由。uv を使う）（いずれも `@latest` 指定で最新安定版を取得）。多くの bash 関数は `fzf`・`fd`・`rg`・`jq`・`nvim`（`$EDITOR`）の存在を前提にしている。依存を追加するときは、`install.sh` の `tools=(…)` 配列に追記すること（バージョンを固定したい場合は `@latest` を具体的なバージョンに置き換える）。
 
 ## コミットメッセージ形式
 

@@ -5,7 +5,7 @@ require_command() {
 	local command=$1
 
 	if ! command -v $command >/dev/null; then
-		echo "$command is not install."
+		echo "$command がインストールされていません"
 		exit 1
 	fi
 }
@@ -14,56 +14,61 @@ require_command() {
 # メイン
 # ---------
 
-# 実行しているパスが正しいか
-if [ $(pwd) != "$HOME/setup" ]; then
-	echo "The setup location is different."
+# 実行しているパスが正しいか（リポジトリは ~/setup にある前提）
+if [ "$(pwd)" != "$HOME/setup" ]; then
+	echo "~/setup で実行してください"
 	exit 1
 fi
 
-# 必要なコマンドが入っているか
-
-# for install mise
+# 必要なコマンド（mise の導入に使う）
 require_command git
 require_command curl
 require_command gcc
 require_command unzip
 
 # デフォルトのシェルを変更
-if [ "$SHELL" != "/bin/bash" ]; then
+# （$SHELL ではなく、ログインシェルとして登録されている値で判定する。/usr/bin/bash も bash として扱う）
+case "$(getent passwd "$(id -un)" | cut -d: -f7)" in
+*/bash) ;;
+*)
 	chsh -s /bin/bash
-fi
+	;;
+esac
 
-# for Python on Ubuntu
+# Ubuntu で Python をビルドするときに要るパッケージ
 # sudo apt install -y libffi-dev libncurses5-dev zlib1g zlib1g-dev libssl-dev libreadline-dev libbz2-dev libsqlite3-dev
 
-# install mise
-if ! command -v mise >/dev/null; then
-	curl https://mise.run | sh
-fi
+# mise を導入する（mise は ~/.local/bin に入るので、先に PATH に足してから有無を確かめる）
 export PATH="$HOME/.local/bin:$PATH"
+if ! command -v mise >/dev/null; then
+	curl -fsSL https://mise.run | sh
+	require_command mise # 導入に失敗していたらここで止める
+fi
 
 # ツールチェインをインストールし、グローバルに設定する
 # @latest を指定すると最新の安定版をインストールする
 tools=(
 	python@latest
-	neovim@latest
+	aqua:neovim/neovim@latest # vfox 版はシェル起動のたびの mise の処理が遅いので aqua 版を使う
 	herdr@latest
 	node@latest
 	jq@latest
 	fzf@latest
 	fd@latest
 	ripgrep@latest
+	uv@latest # pipx バックエンド（mycli）が使う
+	pipx:mycli@latest
 	# redis-cli@latest
 	# zig@latest
 	# zls@latest
 )
 
-# インストール済みのツールは飛ばす（更新したいときは mise_upgrade を使う）
-installed=$(mise ls --global --installed 2>/dev/null | awk '{print $1}') || true
+# 「名前@要求版」が同じものは飛ばす（更新したいときは mise_upgrade を使う。要求版を書き換えたものは入れ直す）
+installed=$(mise ls --global --installed 2>/dev/null | awk '{print $1 "@" $4}')
 
 targets=()
 for tool in "${tools[@]}"; do
-	if ! echo "$installed" | grep -qx "${tool%@*}"; then
+	if ! grep -qxF "$tool" <<<"$installed"; then
 		targets+=("$tool")
 	fi
 done
@@ -72,58 +77,39 @@ if [ ${#targets[@]} -ne 0 ]; then
 	mise use --global --yes "${targets[@]}"
 fi
 
-# mycli は mise の python の pip で導入する
-if ! mise exec -- python -m pip show mycli >/dev/null 2>&1; then
-	mise exec -- python -m pip install --quiet mycli
-fi
-mise reshim
-
-cd $HOME/setup
-
 # bash
-if [ -f $HOME/.bashrc ]; then
-	rm $HOME/.bashrc
-fi
-cp -rfp ./.bashrc $HOME/
+cp -fp --remove-destination ./.bashrc $HOME/ # ~/.bashrc がシンボリックリンクでも、リンク先ではなくリンクを置き換える
 
-# herdr
-mkdir -p $HOME/.config/herdr
-cp -rfp ./herdr/. $HOME/.config/herdr/
-
-# Neovim
-mkdir -p $HOME/.config
-if [ -f $HOME/.config/nvim ]; then
-	rm -rf $HOME/.config/nvim
-fi
-cp -rf ./nvim $HOME/.config/
+# herdr・Neovim（~/.config/herdr・~/.config/nvim に中身をマージしてコピーする）
+mkdir -p "$HOME/.config"
+cp -rfp ./herdr ./nvim $HOME/.config/
 
 # vim-plug
-if [ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/autoload/plug.vim" ]; then
-	sh -c 'curl -fLo "${XDG_DATA_HOME:-$HOME/.local/share}"/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
+plug="${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/autoload/plug.vim"
+if [ ! -e "$plug" ]; then
+	curl -fLo "$plug" --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 fi
 
 # git
-if [ ! -e "$HOME/.config/git/git-completion.bash" ]; then
-	mkdir -p $HOME/.config/git
-	curl -sS "https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash" -o "$HOME/.config/git/git-completion.bash"
+completion="$HOME/.config/git/git-completion.bash"
+if [ ! -e "$completion" ]; then
+	curl -fsSL --create-dirs -o "$completion" "https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash"
 fi
 git config --global commit.template ~/setup/.gitmessages
 git config --global alias.pushf 'push --force-with-lease --force-if-includes'
-git config --global alias.unstage 'restore --staged :/'
-git config --global --add --bool push.autoSetupRemote true
+# 引数が無ければ全部、あれば指定したファイルだけをステージから外す
+git config --global alias.unstage '!f() { cd "${GIT_PREFIX:-.}" && git restore --staged -- "${@:-:/}"; }; f'
+git config --global --replace-all --bool push.autoSetupRemote true
 git config --global mergetool.keepBackup false
 
-# git diff-highlight
-if ! command -v diff-highlight >/dev/null; then
-	if [ -e /usr/share/doc/git/contrib/diff-highlight/diff-highlight ]; then
-		mkdir -p $HOME/.local/bin
-		sudo cp /usr/share/doc/git/contrib/diff-highlight/diff-highlight $HOME/.local/bin/diff-highlight
-		sudo chmod +x $HOME/.local/bin/diff-highlight
-
-		git config --global pager.log "diff-highlight | less"
-		git config --global pager.show "diff-highlight | less"
-		git config --global pager.diff "diff-highlight | less"
-	fi
+# git diff-highlight（無ければ git の contrib から入れて pager に設定する）
+# すでに入っている環境では pager を変えない（delta など、別の pager を設定済みのことがあるため）
+highlight=/usr/share/doc/git/contrib/diff-highlight/diff-highlight
+if ! command -v diff-highlight >/dev/null && [ -e "$highlight" ]; then
+	install -D -m 755 "$highlight" $HOME/.local/bin/diff-highlight
+	git config --global pager.log "diff-highlight | less"
+	git config --global pager.show "diff-highlight | less"
+	git config --global pager.diff "diff-highlight | less"
 fi
 
-echo "DONE"
+echo "完了"

@@ -1,93 +1,60 @@
-# git worktree helpers (既存リポジトリそのまま)
-# 依存: git, fzf / 置き場所: $GW_ROOT/<repo名>/<branch> (デフォルト ~/worktrees)
+# git worktree の補助関数
+# 依存: git, fzf
 
-# 本体リポジトリのルート (worktree 内からでも取れる)
+# 本体リポジトリ（メインの worktree）のルート。worktree 内からでも取れる
+# git worktree list の先頭がメイン（--git-common-dir の親とは限らない。--separate-git-dir の場合など）
 _gw_repo_root() {
-	local common
-	common=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
-	dirname "$(cd "$common" && pwd)"
+	local _ main
+	read -r _ main < <(git worktree list --porcelain 2>/dev/null)
+	[ -n "$main" ] && echo "$main"
 }
 
-# worktree 置き場 ($GW_ROOT/<repo名>)
-_gw_wt_root() {
-	local root
-	root=$(_gw_repo_root) || return 1
-	printf '%s/%s' "${GW_ROOT:-$HOME/worktrees}" "$(basename "$root")"
+_gw_not_repo() {
+	echo "git リポジトリ内で実行してください" >&2
+	return 1
 }
 
 gws() {
-	git rev-parse --git-dir >/dev/null 2>&1 || {
-		echo "git リポジトリ内で実行してください" >&2
-		return 1
-	}
-	local line dir
+	_gw_repo_root >/dev/null || _gw_not_repo || return
+	local line
 	line=$(git worktree list | fzf --prompt="switch> " --query "$1" --select-1) || return 0
-	dir=$(printf '%s' "$line" | awk '{print $1}')
-	[ -n "$dir" ] && cd "$dir"
-}
-
-# 作成: $GW_ROOT/<repo名>/<branch> に worktree を生やす (ローカル/リモート/新規を自動判定)
-gwc() {
-	local name="$1"
-	[ -z "$name" ] && {
-		echo "usage: gwc <branch>" >&2
-		return 1
-	}
-
-	local root dir
-	root=$(_gw_wt_root) || {
-		echo "git リポジトリ内で実行してください" >&2
-		return 1
-	}
-	dir="$root/$(printf '%s' "$name" | tr '/' '-')" # 中間ディレクトリは git が作る
-
-	if [ -e "$dir" ]; then
-		: # 既存なら下で cd するだけ
-	elif git show-ref --verify --quiet "refs/heads/$name"; then
-		git worktree add "$dir" "$name" || return 1
-	elif git show-ref --verify --quiet "refs/remotes/origin/$name"; then
-		git worktree add --track -b "$name" "$dir" "origin/$name" || return 1
-	else
-		git worktree add -b "$name" "$dir" || return 1
-	fi
-	cd "$dir"
+	cd "${line%% *}"
 }
 
 # 削除: fzf で選んで worktree + ブランチを削除 (本体は候補から除外して保護)
 gwd() {
 	local main
-	main=$(_gw_repo_root) || {
-		echo "git リポジトリ内で実行してください" >&2
-		return 1
-	}
+	main=$(_gw_repo_root) || _gw_not_repo || return
 
-	local line dir branch
-	line=$(git worktree list | grep -vF "$main " | fzf --prompt="delete> ") || return 0
-	dir=$(printf '%s' "$line" | awk '{print $1}')
-	[ -z "$dir" ] && return 0
-	branch=$(printf '%s' "$line" | sed -n 's/.*\[\(.*\)\].*/\1/p')
+	local line dir branch=""
+	line=$(git worktree list | tail -n +2 | fzf --prompt="delete> ") || return 0 # 先頭はメイン（削除から保護する）
+	dir=${line%% *}
+	[[ $line =~ \[(.*)\] ]] && branch=${BASH_REMATCH[1]}
 
-	printf "削除: %s [%s] よろしいですか? [y/N] " "$dir" "${branch:-detached}"
-	local ans
-	read -r ans
-	case "$ans" in y | Y) ;; *)
-		echo "中止しました"
-		return 0
-		;;
-	esac
+	__confirm "削除: $dir [${branch:-detached}] よろしいですか?" || return 0
 
 	# 削除対象の中にいたら本体へ退避
 	case "$PWD/" in "$dir"/*) cd "$main" 2>/dev/null || cd "$HOME" ;; esac
+	# 以降の git はメインの worktree を基準に実行する（cd に失敗して $HOME にいても動くように）
 
-	git worktree remove "$dir" 2>/dev/null || git worktree remove --force "$dir" || {
-		echo "worktree の削除に失敗しました" >&2
-		return 1
-	}
+	if [ ! -d "$dir" ]; then
+		# ディレクトリを手で消した worktree（prunable）は、記録だけ片付ける
+		git -C "$main" worktree prune
+	elif ! git -C "$main" worktree remove "$dir" 2>/dev/null; then
+		# 未コミットの変更や未追跡ファイルがあると消せない。中身を見せて、消してよいか確かめる
+		git -C "$dir" status --short
+		__confirm "未コミットの変更があります。破棄して削除しますか?" || return 0
+		git -C "$main" worktree remove --force "$dir" || {
+			echo "worktree の削除に失敗しました" >&2
+			return 1
+		}
+	fi
 
-	if [ -n "$branch" ] && ! git branch -d "$branch" 2>/dev/null; then
-		printf "ブランチ '%s' は未マージです。強制削除しますか? [y/N] " "$branch"
-		local f
-		read -r f
-		case "$f" in y | Y) git branch -D "$branch" ;; *) echo "ブランチは残しました: $branch" ;; esac
+	if [ -n "$branch" ] && ! git -C "$main" branch -d "$branch" 2>/dev/null; then
+		if __confirm "ブランチ '$branch' は未マージです。強制削除しますか?"; then
+			git -C "$main" branch -D "$branch"
+		else
+			echo "ブランチは残しました: $branch"
+		fi
 	fi
 }

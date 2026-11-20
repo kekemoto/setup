@@ -1,6 +1,7 @@
 export HISTSIZE=10000
 export HISTFILESIZE=10000
 export HISTCONTROL=ignoredups:ignorespace
+shopt -s histappend # pane を複数開いても、閉じたシェルの履歴で上書きせず追記する
 
 export COLOR_RED="\e[31m"
 export COLOR_GREEN="\e[32m"
@@ -12,7 +13,7 @@ export EDITOR=nvim
 export LESS='-M -R -F -X'
 
 # -----
-# Prompt
+# プロンプト
 # -----
 
 __prompt_git_branch_name(){
@@ -22,17 +23,19 @@ __prompt_git_branch_name(){
 	fi
 }
 
-export PS1="\n\u \[\033[32m\]\h\[\033[0m\] \D{%F %T}\[\033[33m\]\$(__prompt_git_branch_name)\[\033[0m\] \w\n\$ "
+PS1="\n\u \[\033[32m\]\h\[\033[0m\] \D{%F %T}\[\033[33m\]\$(__prompt_git_branch_name)\[\033[0m\] \w\n\$ "
 
 # -----
-# Alias
+# エイリアス
 # -----
 
 alias apply='cd ~/setup/ && ./install.sh && cd - && . ~/.bashrc'
-alias bashrc='nvim ~/setup/.bashrc && apply && setup_fmt'
-alias bashlo='nvim ~/.bashrc_local && . ~/.bashrc_local'
+alias bashrc='nvim ~/setup/.bashrc && apply'
+alias bashlo='nvim ~/.bashrc_local && _check_600 ~/.bashrc_local && . ~/.bashrc_local'
 alias vimrc='nvim ~/setup/nvim/init.vim && apply'
-alias install='nvim ~/setup/install.sh && apply'
+# coreutils の install を隠さないよう installrc にする（旧版の alias install が残ったシェル用に外しておく）
+unalias install 2>/dev/null
+alias installrc='nvim ~/setup/install.sh && apply'
 
 alias ls='ls -a --color=auto'
 alias ll='ls -alhF --color=auto'
@@ -40,13 +43,12 @@ alias tree='tree --gitignore'
 alias cl='claude'
 alias clc='claude --continue'
 alias clr='claude --resume'
-# alias zip='paste'
 
-alias sudoer='~/setup/bin/sudoer'
-alias ssher='~/setup/bin/ssher'
+# bin/ の ssher・sudoer（sudoer から ssher を spawn できるよう、alias ではなく PATH に入れる）
+case ":$PATH:" in *":$HOME/setup/bin:"*) ;; *) export PATH="$HOME/setup/bin:$PATH" ;; esac
 
 # -----
-# Helper
+# 補助関数
 # -----
 
 setup() {
@@ -55,7 +57,8 @@ setup() {
 
 setup_fmt() {
 	if command -v shfmt >/dev/null; then
-		shfmt -w ~/setup/**/*.sh
+		# shfmt -f はシバンで判定して、拡張子の無い bin/ssher なども拾う。key-bindings.sh は fzf のファイルなので整形しない
+		shfmt -f ~/setup | grep -v key-bindings.sh | xargs -r -d '\n' shfmt -w
 	fi
 }
 
@@ -74,13 +77,9 @@ __confirm() {
 	esac
 }
 
-
-# 空行を出力するだけ。画面を区切りたい時に
-blank(){
-  local count=${1:-40}  # 引数がなければデフォルト10回
-  for i in $(seq 1 "$count"); do
-    echo ""
-  done
+# 空行を出力するだけ。画面を区切りたい時に（引数が無ければ 40 行）
+blank() {
+	yes '' | head -n "${1:-40}"
 }
 
 map() {
@@ -105,17 +104,12 @@ is_wsl() {
 
 append() {
 	cat -
-	echo $1
+	echo "$1"
 }
 
 stderr() {
 	echo "$1" >&2
 }
-
-# # 親プロセスのコマンド名
-# parent_process_name(){
-#   ps -o comm= -p $PPID
-# }
 
 # ディレクトリを遡ってファイル検索
 find_up() {
@@ -133,23 +127,20 @@ find_up() {
 	return 1
 }
 
-# .bashrc_project のパスを取得する
-# 見つからず git worktree の中にいる場合は、メインの worktree から探す
-_find_project_file() {
-	find_up .bashrc_project && return 0
-	local dotgit main
-	# PROMPT_COMMAND から毎回呼ばれるので、git を起動するのは .git がファイル（linked worktree）のときだけにする
-	# .git がディレクトリならメインの worktree の中にいるので探索済み
-	dotgit=$(find_up .git) && [ -f "$dotgit" ] || return 1
-	# メインの worktree は一覧の先頭（common_dir の親とは限らない）
-	read -r _ main < <(git worktree list --porcelain 2>/dev/null)
-	[ -n "$main" ] || return 1
-	find_up .bashrc_project "$main"
+# .bashrc_project のパスを探して $_PROJECT_PATH に入れる。見つからず git worktree の中にいる場合は、メインの worktree から探す
+# 探した結果は $PWD ごとに覚えておき、ディレクトリが変わったときだけ探し直す
+# （PROMPT_COMMAND から毎回呼ばれるので、プロンプトのたびに git を起動しないように。新しく作った .bashrc_project は、別のディレクトリに移って戻ると読まれる）
+_update_project_file() {
+	[ "$PWD" = "$_PROJECT_PWD" ] && return
+	_PROJECT_PWD=$PWD
+	_PROJECT_PATH=$(find_up .bashrc_project || { main=$(_gw_repo_root) && find_up .bashrc_project "$main"; })
+	return 0 # 見つからなくても失敗にしない
 }
 
 # .bashrc_project を編集して読み込み
 bashpr() {
-	local path=$(_find_project_file)
+	_update_project_file
+	local path=$_PROJECT_PATH
 	if [ -n "$path" ]; then
 		nvim "$path"
 		_check_600 "$path" && source "$path"
@@ -157,24 +148,21 @@ bashpr() {
 }
 
 # $1 のファイルが $2 の権限であるかを検証
-# example: is_file_permission path/to/file 600
+# 例: is_file_permission path/to/file 600
 is_file_permission() {
-	local path=$1
-	local expect=$2
-	local actual=$(stat -c "%a" "$path")
-	if [ "$expect" = "$actual" ]; then
-		return 0
-	else
-		return 1
-	fi
+	[ "$(stat -c %a "$1")" = "$2" ]
 }
 
 # source してよいファイル（権限が 600）か検証する。違えば警告して 1 を返す
 # シンボリックリンクはリンク自身の権限（777）で判定されるので常に弾く（clone したリポジトリ経由で任意のファイルを読ませないため）
 # source は呼び出し側で行う（関数内で source すると declare がローカル変数になるため）
+# 所有者が自分であることも確かめる（展開した配布物などに仕込まれたファイルを読まないように）
+_is_safe_source() {
+	is_file_permission "$1" 600 && [ -O "$1" ]
+}
 _check_600() {
-	is_file_permission "$1" 600 && return 0
-	stderr "$1 の権限が 600 ではありません"
+	_is_safe_source "$1" && return 0
+	stderr "$1 の権限が 600 ではない（または所有者が自分ではない）ので読み込みません"
 	return 1
 }
 
@@ -185,9 +173,9 @@ mise_add() {
 	mise use --global "$name@$version"
 }
 
+# mise_add の逆。グローバル設定から外してアンインストールする
 mise_remove() {
-	local name=$1
-	mise uninstall "$name"
+	mise unuse --global "$1"
 }
 
 # インストール済みのツールを最新版に更新する
@@ -220,17 +208,15 @@ rgsed() {
 
 	mapfile -t results < <(rg --vimgrep "$query")
 	for line in "${results[@]}"; do
-		_rgsed $line
+		_rgsed "$line"
 	done
 }
 
 _rgsed() {
-	line="$@"
+	local line=$1 file lineno text action
 
-	# 検索結果のパース
-	file=$(echo "$line" | awk -F ':' '{print $1}')
-	lineno=$(echo "$line" | awk -F ':' '{print $2}')
-	text=$(echo "$line" | awk -F ':' '{print $4}')
+	# 検索結果のパース（file:lineno:column:text）
+	IFS=: read -r file lineno _ text <<<"$line"
 
 	# 結果の表示
 	echo "======"
@@ -251,30 +237,30 @@ _rgsed() {
 	n) ;;
 	e)
 		nvim +$lineno "$file"
-		_rgsed $line
+		_rgsed "$line"
 		;;
 	*)
-		_rgsed $line
+		_rgsed "$line"
 		;;
 	esac
 }
 
-# 標準入力のファイル一覧を nvim のタブで開く
+# 標準入力のファイル一覧を nvim のタブで開く（引数は nvim に渡す。例: nvimp +/pattern）
 nvimp() {
-	xargs nvim -p
+	xargs -r nvim -p "$@"
 }
 
 # 行数の指定付きのパスを開く
 nvimg() {
-  case "$1" in
-    *:*) nvim "+${1##*:}" "${1%:*}" ;;
-    *)   nvim "$1" ;;
-  esac
+	case "$1" in
+	*:*) nvim "+${1##*:}" "${1%:*}" ;;
+	*) nvim "$1" ;;
+	esac
 }
 
 # rg の結果を nvim で開く
 vrg() {
-	rg "$@" -l | xargs nvim +"/$1" -p
+	rg "$@" -l | nvimp +"/$1"
 }
 
 # rg の結果を fzf でファイル選択して nvim で開く
@@ -295,12 +281,11 @@ dif() {
 	diff -u "$1" "$2" | delta "${@:3}"
 }
 difs() {
-	# あんま使わないから delta はデフォルトでは入れてない
-	diff -u "$1" "$2" | delta --side-by-side "${@:3}"
+	dif "$1" "$2" --side-by-side "${@:3}"
 }
 
-ssh_hosts(){
-	cat ~/.ssh/config | grep '^Host ' | grep -v '\*' | awk '{print $2}'
+ssh_hosts() {
+	awk 'tolower($1) == "host" { for (i = 2; i <= NF && $i !~ /^#/; i++) if ($i !~ /[*?]/) print $i }' ~/.ssh/config
 }
 
 # -----
@@ -310,9 +295,9 @@ ssh_hosts(){
 anthropic_api() {
 	local message=$(cat -)
 	local model=${1:-claude-haiku-5-5}
-	local tmpfile=$(mktemp)
-
-	ANTHROPIC_API_KEY="$(secret_get anthropic)"
+	local tmpfile key
+	key=$(secret_get anthropic) || return # キーはコマンドライン引数に載せない（ps で見えないよう、ヘッダーはファイル経由で渡す）
+	tmpfile=$(mktemp)
 
 	jq -n \
 		--arg model "$model" \
@@ -322,35 +307,35 @@ anthropic_api() {
       max_tokens: 1024,
       messages: [{role: "user", content: $content}]
     }' | curl -sS --fail-with-body -o "$tmpfile" https://api.anthropic.com/v1/messages \
-		--header "x-api-key: $ANTHROPIC_API_KEY" \
+		--header @<(printf 'x-api-key: %s\n' "$key") \
 		--header "anthropic-version: 2023-06-01" \
 		--header "content-type: application/json" \
 		--data-binary @-
 
-	if [ $? -ne 0 ]; then
+	local rc=$?
+	if [ "$rc" -ne 0 ]; then
 		cat "$tmpfile"
 	else
 		jq -r '.content[0].text' "$tmpfile"
 	fi
 
 	rm -f "$tmpfile"
+	return "$rc" # API のエラー（認証失敗など）を呼び出し元に返す
 }
 
-# models: haiku, sonnet, opus
+# モデル: haiku, sonnet, opus
 claude_code() {
 	local model=${1:-sonnet}
-	claude -p --settings '{"disableAllHooks":true}' --strict-mcp-config --mcp-config "" --disable-slash-commands --model "$model"
+	# ツールは使わせず（入力の文章に書かれた指示で何かを実行させない）、セッションも残さない（claude --continue で拾われないように）
+	claude -p --settings '{"disableAllHooks":true}' --strict-mcp-config --mcp-config "" --disable-slash-commands --tools "" --no-session-persistence --model "$model"
 }
 
 if command -v ollama >/dev/null; then
-	# ollama サーバーが起動してなかったら起動する
-	pgrep -f "ollama serve" > /dev/null || { nohup ollama serve > ~/ollama.log 2>&1 & }
-
 	alias ollama_log="less ~/ollama.log"
 
 	ollama_cli(){
 		local model=${1:-'gemma3:4b'}
-		cat | ollama run $model
+		ollama run "$model"
 	}
 fi
 
@@ -372,9 +357,11 @@ _pane_color() {
 		printf '\e]111\a\e]110\a'
 	fi
 }
-alias color_red='_pane_color "#350000"'
-alias color_green='_pane_color "#003500"'
-alias color_black='_pane_color'
+# 旧版の alias color_* が残ったシェルで apply すると、下の関数定義が壊れるので外す（移行用。旧版のシェルが無くなったら消してよい）
+unalias color_red color_green color_black 2>/dev/null
+color_red() { _pane_color "#350000"; }
+color_green() { _pane_color "#003500"; }
+color_black() { _pane_color; }
 
 # tab の名前を変更する
 tab_rename() {
@@ -383,7 +370,11 @@ tab_rename() {
 
 # pane の色と tab の名前を変更する
 change_window() {
-	eval color_$1
+	if ! declare -F "color_$1" >/dev/null; then
+		stderr "色は red・green・black のどれかを指定してください"
+		return 1
+	fi
+	"color_$1"
 	tab_rename "$2"
 }
 
@@ -498,7 +489,7 @@ _tab_autoname_loop() {
 # herdr の中でシェルが起動したら、そのセッション用の _tab_autoname_loop を裏で 1 つだけ起動する
 # 二重起動は flock で防ぐ（ロックはセッションのソケットの隣に置く）。起動した pane を閉じても止まらないよう HUP を無視する
 _tab_autoname_start() {
-	[ -n "$HERDR_SOCKET_PATH" ] && command -v flock >/dev/null || return 0
+	[ -n "$HERDR_SOCKET_PATH" ] || return 0
 	( (
 		trap '' HUP
 		cd ~ || exit # 起動したディレクトリ（worktree など）が消えても動き続けられるように
@@ -511,6 +502,32 @@ _tab_autoname_start() {
 		exec 2>"$HERDR_SOCKET_PATH.autoname.log"
 		_tab_autoname_loop
 	) 9>"$HERDR_SOCKET_PATH.autoname.lock" >/dev/null 2>&1 &)
+}
+
+# プロジェクトのワークスペースに入る。label のワークスペースに切り替える（無ければ dir で作る）
+# herdr の外から呼んだときは、そのあと herdr に入る。サーバーが動いていなければ dir で herdr を起動する
+# label を省略すると dir の名前を使う
+# 例: herdr_workspace ~/work/MoppyBaito moppy
+herdr_workspace() {
+	local dir list id
+	dir=$(realpath -e -- "${1:-.}") || return # 相対パスでも名前と作業ディレクトリが正しくなるように（無いディレクトリはエラー）
+	local label=${2:-${dir##*/}}
+	if ! list=$(herdr workspace list 2>/dev/null); then
+		# herdr の中なら入れ子に起動しない（一時的に応答しなかっただけのこともある）
+		if [ -n "$HERDR_PANE_ID" ]; then
+			stderr "herdr のワークスペース一覧を取得できませんでした"
+			return 1
+		fi
+		(cd "$dir" && herdr) # herdr を抜けたあと、呼び出したシェルは元のディレクトリのまま
+		return
+	fi
+	id=$(jq -r --arg l "$label" 'first(.result.workspaces[] | select(.label == $l) | .workspace_id) // empty' <<<"$list") || return
+	if [ -n "$id" ]; then
+		herdr workspace focus "$id" >/dev/null
+	else
+		herdr workspace create --cwd "$dir" --label "$label" --focus >/dev/null
+	fi || return
+	[ -n "$HERDR_PANE_ID" ] || herdr
 }
 
 # pane を 4 分割する
@@ -528,7 +545,8 @@ herdr_split() {
 
 # プロジェクト名を取得する
 project_name() {
-	local path=$(_find_project_file)
+	_update_project_file
+	local path=$_PROJECT_PATH
 	if [ -n "$path" ]; then
 		basename "$(dirname "$path")"
 	else
@@ -543,11 +561,13 @@ local_window() {
 }
 
 # .bashrc_project を読み込む（権限が 600 でなければ読み込まない）
+# 関数の中で source するので、.bashrc_project で declare を使うときは -g を付ける（付けないとローカル変数になって消える）
 load_project() {
-	local path=$(_find_project_file)
-	[ -n "$path" ] || return 0
+	_update_project_file
+	local path=$_PROJECT_PATH
+	[ -f "$path" ] || return 0 # 見つからない（または覚えたあとに消された）
 	# プロンプトごとに呼ばれるので、権限の警告は同じファイルにつき 1 回だけ出す
-	if is_file_permission "$path" 600; then
+	if _is_safe_source "$path"; then
 		_PROJECT_WARNED=
 		source "$path"
 	elif [ "$_PROJECT_WARNED" != "$path" ]; then
@@ -558,11 +578,10 @@ load_project() {
 }
 
 # PROMPT_COMMAND に設定されたコマンドは、すべてのコマンド実行後に毎回実行されます。
-#PROMPT_COMMAND='load_project; local_window'
 PROMPT_COMMAND='load_project'
 
 # -----
-# Sound
+# 音
 # -----
 
 beep() {
@@ -571,10 +590,10 @@ beep() {
 		# WSL の場合
 		if [ $result -eq 0 ]; then
 			beep_success
-			echo OK
+			echo 成功
 		else
 			beep_fail
-			echo ERROR
+			echo 失敗
 		fi
 	else
 		# Linux の場合
@@ -582,56 +601,25 @@ beep() {
 	fi
 }
 
-# simple sound
-beep_success() {
-	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local fa="[console]::beep(587,100);"  # ファ
-	local si="[console]::beep(831,100);"  # シ
-	powershell.exe -Command $lag$fa$si$si
+# 音を鳴らす（Windows の beep）。引数は周波数（Hz）を並べる。最初にラグ対策で無音に近い音を 2 秒入れる
+# 440:ド 494:レ 523:レ# 554:ミ 587:ファ 622:ファ# 659:ソ 699:ソ# 740:ラ 831:シ
+_beep() {
+	local cmd="[console]::beep(37,2000);" f
+	for f; do
+		cmd+="[console]::beep($f,100);"
+	done
+	powershell.exe -Command "$cmd"
 }
-
-# simple sound
-beep_fail() {
-	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local do="[console]::beep(440,100);"  # ド
-	local fa="[console]::beep(587,100);"  # ファ
-	powershell.exe -Command $lag$fa$do$do
-}
-
-# ゼルダの伝説
-beep_good() {
-	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local do="[console]::beep(440,100);"  # ド
-	local re="[console]::beep(494,100);"  # レ
-	local res="[console]::beep(523,100);" # レ#
-	local mi="[console]::beep(554,100);"  # ミ
-	local fa="[console]::beep(587,100);"  # ファ
-	local fas="[console]::beep(622,100);" # ファ#
-	local so="[console]::beep(659,100);"  # ソ
-	local sos="[console]::beep(699,100);" # ソ#
-	local ra="[console]::beep(740,100);"  # ラ
-	local si="[console]::beep(831,100);"  # シ
-	powershell.exe -Command $lag$fas$fa$re$sos$so$res$so$si
-}
-
-beep_bad() {
-	local lag="[console]::beep(37,2000);" # ラグ対策に無音に近い音を2秒
-	local do="[console]::beep(440,100);"  # ド
-	local re="[console]::beep(494,100);"  # レ
-	local mi="[console]::beep(554,100);"  # ミ
-	local fa="[console]::beep(587,100);"  # ファ
-	local fa="[console]::beep(622,100);"  # ファ#
-	local so="[console]::beep(659,100);"  # ソ
-	local ra="[console]::beep(740,100);"  # ラ
-	local si="[console]::beep(831,100);"  # シ
-	powershell.exe -Command $lag$si$fa$fa$fa$mi$re$do
-}
+beep_success() { _beep 587 831 831; }
+beep_fail() { _beep 587 440 440; }
+beep_good() { _beep 622 587 494 699 659 523 659 831; } # ゼルダの伝説
+beep_bad() { _beep 831 622 622 622 554 494 440; }
 
 # -----
-# Secret Manager
+# 秘密情報の管理
 # -----
 
-export SECRET_DATA_PATH="/home/kekemoto/.secret_data.gpg"
+export SECRET_DATA_PATH="$HOME/.secret_data.gpg"
 
 # 標準入力を gpg で暗号化して標準出力する
 # gpg_passphrease : gpg で使うパスワード
@@ -652,7 +640,15 @@ __secret_encrypt() {
 		return 1
 	fi
 
-	__encrypt $GPG_PASSWORD >$SECRET_DATA_PATH
+	# 一時ファイルに書いてから置き換える（途中で失敗しても既存のファイルを壊さない）。_check_600 を通るよう 600 で作る
+	local tmp
+	tmp=$(umask 077 && mktemp "$SECRET_DATA_PATH.XXXXXX") || return 1
+	if __encrypt "$GPG_PASSWORD" >"$tmp"; then
+		mv -f "$tmp" "$SECRET_DATA_PATH"
+	else
+		rm -f "$tmp"
+		return 1
+	fi
 }
 
 # $SECRET_DATA_PATH を復号化して標準出力
@@ -687,10 +683,12 @@ secret_add() {
 
 	if [ ! -e "$SECRET_DATA_PATH" ]; then
 		echo "$key $secret" | __secret_encrypt
-		return 0
+		return
 	fi
 
-	local value=$(__secret_decrypt)
+	# 復号に失敗したまま書き込むと既存の秘密が消えるので、失敗したら中止する
+	local value
+	value=$(__secret_decrypt) || return 1
 	value+="
 $key $secret"
 	echo "$value" | __secret_encrypt
@@ -715,9 +713,12 @@ secret_get() {
 # Git
 # -----
 
-# 補完
-if [ -f ~/.config/git/git-completions.bash ]; then
-	. ~/.config/git/git-completions.bash
+# 補完（install.sh が置く）。読み込みが重い（約 50ms）ので、初めて git の補完を使うときに読み込む
+if [ -f ~/.config/git/git-completion.bash ]; then
+	_git_completion_lazy() {
+		. ~/.config/git/git-completion.bash && __git_wrap__git_main "$@"
+	}
+	complete -o bashdefault -o default -o nospace -F _git_completion_lazy git
 fi
 
 alias gs='git status'
@@ -733,44 +734,40 @@ alias gd1='git diff @~ @'
 
 # git log
 gl() {
-	local num
-	if [ -z $1 ]; then
-		num=3
-	else
-		num=$1
-	fi
-
-	git log --reverse -n $num
+	git log --reverse -n "${1:-3}"
 }
 
 # git add -N
 gan() {
-	# git ls-files --others --exclude-standard -z | xargs -0 git add -N
 	git add -AN "$@"
 }
 
 # git add -p
 gap() {
-	gan
+	gan "$@"
 	git add -p "$@"
 }
 
-# git commit backup
+# バックアップ用のコミット（フックを飛ばす）
 gcb() {
-	local msg='backup'
-	if [ ! -z $1 ]; then
-		msg="$msg: $1"
-	fi
-	git commit -m "$msg" --no-verify
+	git commit -m "backup${1:+: $1}" --no-verify
 }
 
-# git commit message
+# コミットメッセージを LLM で作ってコミットする
 gcm() {
-	git commit -m "$(make_git_commit_message)" && git commit --amend --no-verify
+	local msg
+	msg=$(make_git_commit_message) || return # 生成に失敗したら（ログイン切れなど）コミットしない
+	git commit -e -m "$msg"                  # 生成した文面を初期値にしてエディタで直す（空にすれば中止）
 }
 
 make_git_commit_message() {
-	git diff --staged -- . ':(exclude)package-lock.json' ':(exclude)worker-configuration.d.ts' | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、空行を入れてから詳細を書いてください。それを日本語で**コミットメッセージだけ**を出力してください" | llm
+	git rev-parse --git-dir >/dev/null || return 1
+	local pathspec=(:/ ':(exclude,top)package-lock.json' ':(exclude,top)worker-configuration.d.ts')
+	if git diff --staged --quiet -- "${pathspec[@]}"; then
+		stderr "ステージされた変更がありません（除外したファイルを除く）"
+		return 1
+	fi
+	git diff --staged -- "${pathspec[@]}" | append "上記の差分の内容から git commit のメッセージを考えてください。一行目に概要を短く書き、空行を入れてから詳細を書いてください。それを日本語で**コミットメッセージだけ**を出力してください" | llm
 }
 
 # git switch
@@ -778,11 +775,13 @@ make_git_commit_message() {
 unalias sw 2>/dev/null
 sw() {
 	local selected branch worktree_dir
-	selected="$(git branch --format='%(refname:short)%09%(worktreepath)' |
+	selected="$(git for-each-ref --format='%(refname:short)%09%(worktreepath)' refs/heads | # detached HEAD の行は出さない
 		fzf --query "$1" --select-1 --delimiter=$'\t' --nth=1)" || return
 	branch="${selected%%$'\t'*}"
 	worktree_dir="${selected#*$'\t'}"
-	if [[ -n "${worktree_dir}" ]]; then
+	if [[ "$worktree_dir" == "$(git rev-parse --show-toplevel)" ]]; then
+		: # 今いる worktree のブランチなら何もしない（サブディレクトリから動かない）
+	elif [[ -n "${worktree_dir}" ]]; then
 		cd "${worktree_dir}" # worktree にあるブランチなら、その worktree へ移動
 	else
 		git switch "${branch}" # どの worktree にも無いブランチなら、今いる worktree で switch
@@ -790,10 +789,7 @@ sw() {
 }
 
 # git switch -c
-gsc() {
-	git switch -c "$@"
-}
-alias swc=gsc
+alias swc='git switch -c'
 
 # git reset --soft
 grs() {
@@ -813,33 +809,25 @@ gpull() {
 	git pull
 }
 
-# git conflict nvim
+# コンフリクト中のファイルを nvim で開く
 gcn() {
-	git status -s | awk '$1 == "UU" { print $2 }' | xargs nvim +"/=======" -p
+	# コンフリクト中のファイル（UU だけでなく AA・DU なども）をリポジトリのルートから開く
+	(cd "$(git rev-parse --show-toplevel)" && git diff --name-only --diff-filter=U | nvimp +"/=======")
 }
 
-# git status nvim
+# 変更したファイルを nvim で開く
 gsn() {
-	git status -s | awk '$1 != "D" { print $2 }' | xargs nvim -p
+	git status -s | awk '$1 != "D" { print $2 }' | nvimp
 }
 
-# git rebase
-g_rebase() {
-	local branch=${1:-main}
-	local now=$(git branch --show-current)
-	git switch $branch &&
-		gpull &&
-		git switch $now &&
-		git rebase $branch
+# origin の base ブランチ（既定 main）を fetch し、$1（rebase か merge）で取り込む
+# （ブランチを切り替えないので worktree の中でも使える。ローカルの main は更新しない）
+_g_update_from() {
+	local cmd=$1 branch=${2:-main}
+	git fetch origin "$branch" && git "$cmd" "origin/$branch"
 }
-
-# git merge
-g_merge ()
-{
-    local branch=${1:-main};
-    local now=$(git branch --show-current);
-    git switch $branch && gpull && git switch $now && git merge $branch
-}
+g_rebase() { _g_update_from rebase "$@"; }
+g_merge() { _g_update_from merge "$@"; }
 
 # git stash save
 g_save() {
@@ -851,62 +839,14 @@ g_pop() {
 	git stash pop
 }
 
-# git diff merge
-gdm(){
-	git diff @..."$@"
-}
-
 g_code_review() {
 	local branch=$1
 	local model=$2 # 空でもOK
+	if [ -z "$branch" ]; then
+		stderr "使い方: g_code_review <ブランチ名> [モデル]"
+		return 1
+	fi
 	git log -p remotes/origin/main..remotes/origin/"$branch" | append '上記の内容からコードレビューして' | llm "$model"
-}
-
-g_branch_all_delete() {
-	local branch=${1:-main}
-	git switch $branch && gpull && git branch | awk '{print $1}' | grep -v '*' | xargs git branch -d
-}
-
-g_project_switch() {
-	local project_name="${1//\//_}"
-	local base_dir="$HOME/work/dev"
-
-	if [[ -z "$project_name" ]]; then
-		stderr "Usage: cl_switch <project_name>"
-		stderr "Example: cl_switch myapp"
-		stderr "         (clones current repo to ~/dev/myapp and switches to it)"
-		return 1
-	fi
-
-	local old_project_dir=$(pwd)
-
-	# カレントディレクトリからリモートURLを取得
-	local repo_url=$(git remote get-url origin 2>/dev/null)
-	if [[ -z "$repo_url" ]]; then
-		stderr "Error: Current directory is not a git repository with origin remote."
-		return 1
-	fi
-
-	# プロジェクトディレクトリが存在しない場合はコピーする
-	local project_dir="$base_dir/$project_name"
-	if [[ ! -d "$project_dir" ]]; then
-		mkdir -p "$base_dir"
-		cp -R "$old_project_dir" "$project_dir"
-	fi
-
-	cd "$project_dir" || return 1
-
-	if [ "$repo_url" != "$(git remote get-url origin 2>/dev/null)" ]; then
-		stderr "Error: リポジトリが一致しませんでした。別リポジトリのブランチ名と衝突した可能性があります"
-		return 1
-	fi
-
-	# ブランチが存在するかチェック
-	if git show-ref --verify --quiet "refs/heads/$project_name"; then
-		git switch "$project_name"
-	else
-		git switch -c "$project_name"
-	fi
 }
 
 # -----
@@ -923,50 +863,46 @@ alias dcul="dcu && dcl"
 alias dcs="docker compose stop"
 alias dcd="docker compose down -t 5"
 alias dcl="docker compose logs -f --tail 1000"
-# alias dcr="docker compose restart -t 5"
 
 de() {
-	if [ -z $2 ]; then
-		docker exec -it $1 bash
-	else
-		docker exec -it $1 $2
-	fi
+	docker exec -it "$1" "${2:-bash}"
 }
 
-dd() {
-	echo start
-	docker container stop -t 5 $1 >/dev/null
-	echo container stoped $1
-	docker container rm $1 >/dev/null
-	echo container removed $1
-	if [ ! -z $2 ]; then
-		docker image rm $2 >/dev/null
-		echo image removed $2
-	fi
-}
+# コンテナを止めて削除し、指定があればイメージも削除する（coreutils の dd を隠さないよう drm に改名。使うときはコメントを外す）
+# drm() {
+# 	echo start
+# 	docker container stop -t 5 $1 >/dev/null
+# 	echo container stoped $1
+# 	docker container rm $1 >/dev/null
+# 	echo container removed $1
+# 	if [ ! -z $2 ]; then
+# 		docker image rm $2 >/dev/null
+# 		echo image removed $2
+# 	fi
+# }
 
 # -----
 # fzf
 # -----
 
+# 全画面に切り替えず、プロンプトの下に小さく出す（~ は候補が少なければ高さを縮める）
+export FZF_DEFAULT_OPTS='--height ~40% --layout=reverse'
+
 # https://raw.githubusercontent.com/junegunn/fzf/master/shell/key-bindings.bash
 source ~/setup/scripts/key-bindings.sh
 
 fcd() {
-	cd ~
-	if [ -z $1 ]; then
-		cd $(fd . | fzf)
-	else
-		cd $(fd . | fzf --query $1)
-	fi
+	local dir
+	dir=$(cd ~ && fd --type d . | fzf --query "$1") || return # 中止したら今のディレクトリのまま
+	cd ~/"$dir"
 }
 
-# fzf git status
+# 変更したファイルを fzf で選ぶ
 fgs() {
 	git status -s | awk '{print $2}' | fzf --query "$1" --select-1
 }
 
-# fzf git branch
+# ブランチを fzf で選ぶ
 fgb() {
 	git branch --format='%(refname:short)' | fzf --query "$1" --select-1
 }
@@ -975,11 +911,9 @@ fgb() {
 # mise
 # -----
 
-export PATH="$HOME/.local/bin:$PATH"
+# apply で読み直しても PATH に重ねて足さないように
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 eval "$(mise activate bash)"
-
-# mise_add shfmt
-# mise_add redis-cli
 
 # -----
 # その他設定
@@ -993,12 +927,17 @@ source ~/setup/scripts/git_worktree.sh
 shopt -s globstar
 
 # .bashrc_local の権限をバリデーション
-BASHRC_LOCAL="$HOME/.bashrc_local"
-if [ -f "$BASHRC_LOCAL" ] && _check_600 "$BASHRC_LOCAL"; then
-	source "$BASHRC_LOCAL"
+if [ -f ~/.bashrc_local ] && _check_600 ~/.bashrc_local; then
+	source ~/.bashrc_local
 fi
 
-# PATH（mise）が整ってから、名前付けのループを起動する（対話シェルだけ）
+# 起動時の副作用は対話シェルのときだけ（ssh host cmd などの非対話シェルでは走らせない）。PATH（mise）が整ってから行う
 if [[ $- == *i* ]]; then
+	# pane が同時にいくつも起動しても 1 つだけが動くよう flock を取り、裏で動かす（ジョブの通知やエラーを pane に出さない）
+	( (flock -n 9 && _trash_purge) 9>"$TRASH_DIR.lock" >/dev/null 2>&1 &)
+	# ollama サーバーが起動してなかったら起動する（ログは追記。起動に失敗した側がログを空にしないように）
+	if command -v ollama >/dev/null; then
+		( (flock -n 9 && ! pgrep -f "ollama serve" >/dev/null && nohup ollama serve >>~/ollama.log 2>&1) 9>~/.ollama_start.lock &)
+	fi
 	_tab_autoname_start
 fi
