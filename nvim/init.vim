@@ -45,23 +45,25 @@ autocmd kekemoto InsertEnter * call feedkeys("\<Cmd>noh\<cr>" , 'n')
 " WSL では ~/setup/bin/yank（clip.exe）で、それ以外（ssh 先など）では OSC 52 で端末（herdr）経由で送る
 " yank の完了を待たないよう、非同期で起動して標準入力に渡す
 let s:yank = expand('~/setup/bin/yank')
-function! s:Yank() abort
-  if v:event.operator !=# 'y' || v:event.regname ==# '_'
-    return
-  endif
-  " ヤンクした内容そのもの（regcontents）を送る。行単位のヤンクは末尾に改行を付ける
-  let l:lines = v:event.regcontents + (v:event.regtype ==# 'V' ? [''] : [])
+function! s:Copy(lines) abort
   if has('wsl')
     let l:job = jobstart([s:yank], {'detach': v:true}) " nvim をすぐ閉じても止まらないように
     if l:job <= 0
       echohl ErrorMsg | echomsg 'クリップボードにコピーできません: ' . s:yank | echohl None
       return
     endif
-    call chansend(l:job, l:lines)
+    call chansend(l:job, a:lines)
     call chanclose(l:job, 'stdin')
   elseif has('nvim-0.10')
-    call luaeval("require('vim.ui.clipboard.osc52').copy('+')(_A)", l:lines)
+    call luaeval("require('vim.ui.clipboard.osc52').copy('+')(_A)", a:lines)
   endif
+endfunction
+function! s:Yank() abort
+  if v:event.operator !=# 'y' || v:event.regname ==# '_'
+    return
+  endif
+  " ヤンクした内容そのもの（regcontents）を送る。行単位のヤンクは末尾に改行を付ける
+  call s:Copy(v:event.regcontents + (v:event.regtype ==# 'V' ? [''] : []))
 endfunction
 autocmd kekemoto TextYankPost * call s:Yank()
 
@@ -91,7 +93,9 @@ endfunction
 " 開いているファイルのパスをクリップボードに登録
 " Filepath Copy
 function! FC() abort
-  let @+ = expand("%")
+  let l:path = expand("%")
+  let @+ = l:path
+  call s:Copy([l:path])
 endfunction
 
 " キーマップ
