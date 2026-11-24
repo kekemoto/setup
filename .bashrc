@@ -430,12 +430,22 @@ _tab_autoname_all() {
 	wait
 }
 
+# 名前を付けてよい時間なら真を返す。ローカルはいつでも、リモートサーバー（SSH で入ったシェル）は仕事の時間（平日の 9 時〜19 時）だけ。祝日は考えない
+_tab_autoname_work_time() {
+	local day hour
+	[ -n "$SSH_CONNECTION" ] || return 0
+	read -r day hour < <(date '+%u %H')
+	((day <= 5 && 10#$hour >= 9 && 10#$hour < 19))
+}
+
 # 600 秒ごとに _tab_autoname_all を繰り返す。herdr のセッション（ソケット）が無くなったら終わる
+# リモートサーバーでは仕事の時間外（夜・土日）は何もしない（使っていない tab に claude を呼ばないように）
 # change_window などで手で付けた tab 名も上書きする
 # 失敗の理由はログ $1 に書く（毎回開き直すので手で消されても作り直される。1MB を超えたら .1 に退避する）
 _tab_autoname_loop() {
 	local log=$1
 	while sleep 600 && [ -S "$HERDR_SOCKET_PATH" ]; do
+		_tab_autoname_work_time || continue
 		[ "$(stat -c %s "$log" 2>/dev/null || echo 0)" -le 1048576 ] || mv -f "$log" "$log.1" 2>>"$log"
 		_tab_autoname_all 2>>"$log" # mv のあとで開き直すので、新しいログに書く
 	done
