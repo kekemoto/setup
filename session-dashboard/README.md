@@ -36,6 +36,6 @@ watch -n5 session-dashboard --peer dev2    # 常時表示
    ```
 
 3. 相手のサーバーに鍵で ssh できること（パスワードを聞かれないこと）と、相手側に `python3` があることを確かめる
-4. 失敗は `~/.local/state/session-dashboard/error.log` に残る
+4. 失敗は `~/.local/state/session-dashboard/error.log` に残る（一覧を出したときに 100KB を超えていれば `error.log.old` に移し、それは 1 日後に消える）
 
 以後の更新はプルだけで反映される。`settings.json` の変更が要るときだけ、この手順を頼み直す。
