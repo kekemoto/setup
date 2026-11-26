@@ -111,10 +111,8 @@ def remove_record(sid):
 	# ロックファイルは消さない（待っているプロセスと、後から開いたプロセスが別のファイルをロックして、排他が効かなくなるため）
 	with locked(sid):
 		for suffix in (".md", ".md.tmp"):
-			try:
+			with contextlib.suppress(FileNotFoundError):
 				os.remove(path_of(sid, suffix))
-			except FileNotFoundError:
-				pass
 
 
 def entries(lines):
@@ -199,11 +197,11 @@ def update_status(meta, event, data):
 
 def new_record(data, where):
 	t = now()
-	meta = {"session_id": data["session_id"], "server": HOST, "started_at": t}
+	meta = {"session_id": data["session_id"], "started_at": t}
 	meta.update(where)
 	cwd = meta["cwd"]
 	importance = "low" if any(under(cwd, d) for d in LOW_IMPORTANCE_DIRS) else "mid"
-	meta.update({"status": "user_turn", "purpose": "", "last_prompt": "", "ai_result": "", "priority": {"importance": importance, "effort": "mid"}, "transcript_offset": 0})
+	meta.update({"status": "user_turn", "priority": {"importance": importance, "effort": "mid"}})
 	body = "\n## 経緯\n"
 	# fork したセッションは、コピーされた親の会話を記録係に読ませない（分岐後の依頼から目的を作らせる）
 	# この時点では transcript がまだ無いので位置では区切れない。コピーされた発言は親のときの timestamp のままなので、時刻で区切る
@@ -338,7 +336,7 @@ def record(data):
 				meta["purpose"] = result["purpose"]
 				meta["ai_result"] = result["ai_result"]
 				meta["priority"] = {"importance": result["importance"], "effort": result["effort"]}
-				hhmm = datetime.now().strftime("%H:%M")
+				hhmm = now()[11:16]
 				body += "".join("- %s %s\n" % (hhmm, " ".join(e.split())) for e in result["events"] if e.strip())
 			title = custom_title(decoded.splitlines())
 			if title:
@@ -352,10 +350,9 @@ def summarize(meta, text):
 		system = f.read()
 	current = {k: meta.get(k, "") for k in ("purpose", "ai_result", "priority")}
 	prompt = "# 現在の記録\n%s\n\n# 新しく増えた会話\n%s" % (json.dumps(current, ensure_ascii=False), text)
-	# 作業中のセッションの環境変数を引き継がない（ログインに使うものは残す。.bashrc の _tab_autoname_start と揃える）
+	# 作業中のセッションの環境変数を引き継がない（ログインに使うものは残す）。環境変数とフラグの扱いは .bashrc の _tab_autoname_start と揃える
 	env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE") or k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN") or k.startswith("CLAUDE_CODE_USE_")}
 	# disableAllHooks で、記録係自身の呼び出しで hook が動く（記録ファイルができる・記録係が再帰的に動く）のを防ぐ
-	# フラグは .bashrc の tab_autoname と揃える
 	cmd = ["claude", "-p", "--model", "haiku", "--tools", "", "--settings", '{"disableAllHooks":true}', "--strict-mcp-config", "--mcp-config", "", "--disable-slash-commands", "--output-format", "json", "--no-session-persistence", "--json-schema", json.dumps(SCHEMA), "--system-prompt", system]
 	out = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=300, env=env, cwd=STATE_DIR, check=True).stdout
 	reply = json.loads(out)
@@ -411,17 +408,29 @@ def interrupted(lines):
 	return False
 
 
+def purge_locks():
+	"""記録が消えてから 1 日たったロックファイルを消す（remove_record は排他のために残すので、放っておくと溜まる。1 日たてば待っているプロセスは無い）"""
+	limit = datetime.now().timestamp() - 86400
+	for name in os.listdir(STATE_DIR):
+		path = os.path.join(STATE_DIR, name)
+		if name.endswith(".lock") and not os.path.exists(path_of(name.split(".")[0])) and os.path.getmtime(path) < limit:
+			with contextlib.suppress(FileNotFoundError):
+				os.remove(path)
+
+
 def dump():
 	"""このサーバーの記録を、表示する欄（state）を判定して返す"""
 	out = []
 	if not os.path.isdir(STATE_DIR):
 		return out
+	purge_locks()
 	current_boot = boot_id()
 	for sid in session_ids():
 		rec = read_record(sid)
 		if rec is None:
 			continue
 		meta, body = rec
+		meta["server"] = HOST
 		pid = meta.get("pid")
 		stopped = meta.get("detached") or meta.get("boot_id") != current_boot or (pid and not alive(pid))
 		# 停止中のものは、引き継ぎ（末尾の数行にある）を見るのに足りる分だけ読む
@@ -474,9 +483,7 @@ SECTIONS = [("user_turn", "自分の番"), ("waiting", "待機中"), ("ai_workin
 
 def sort_key(m):
 	p = m.get("priority") or {}
-	# importance は記録ファイルに数値が直接書かれていればその値を使う（仕様 6.2）。分からない値は mid
-	imp = p.get("importance")
-	imp = imp if isinstance(imp, (int, float)) else IMPORTANCE.get(imp, IMPORTANCE["mid"])
+	imp = IMPORTANCE.get(p.get("importance"), IMPORTANCE["mid"])
 	# 同じ重要度・所要時間の中では、指示を出したのが新しい順（まだ指示の無いものは、始めた時刻）
 	prompted = parse_time(m.get("last_prompt_at") or m["started_at"]).timestamp()
 	return (-imp, EFFORT.get(p.get("effort"), EFFORT["mid"]), -prompted)
