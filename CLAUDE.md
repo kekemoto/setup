@@ -53,7 +53,9 @@ setup_fmt
 
 対話シェルの起動の最後に、ゴミ箱の整理・ollama の起動と、herdr の中なら tab 名を自動で付けるループ（`_tab_autoname_start`。10 分ごとに（SSH で入ったリモートサーバーでは平日 9〜19 時だけ）各 tab の画面の内容を Claude Haiku に送って名前を付ける）をセッションごとに 1 つ起動する。
 
-`bin/` には（ソースされず、`.bashrc` で PATH に入る）スタンドアロン実行ファイルが 3 つある: `yank`（標準入力を WSL のクリップボードへコピー。nvim のヤンクからも呼ぶ）、`ssher`（複数の SSH ホストで同一コマンドを実行）と `sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー。`expect` は install.sh では入れないので、使うなら apt などで入れる）。
+`bin/` には（ソースされず、`.bashrc` で PATH に入る）スタンドアロン実行ファイルが 4 つある: `yank`（標準入力を WSL のクリップボードへコピー。nvim のヤンクからも呼ぶ）、`ssher`（複数の SSH ホストで同一コマンドを実行）、`sudoer`（spawn したコマンド ── `ssher` を含む ── に sudo パスワードを渡す `expect` ラッパー。`expect` は install.sh では入れないので、使うなら apt などで入れる）と `session-dashboard`（`session-dashboard/` へのシンボリックリンク）。
+
+`session-dashboard/` は、2 台のサーバーの Claude Code のセッションを一覧するダッシュボード（Python 1 ファイル。hook・記録係・一覧の表示を兼ねる）。install.sh では導入せず、各サーバーで `session-dashboard/README.md` の手順に沿って `~/.claude/settings.json` に hooks を登録する。記録は `~/.local/state/session-dashboard/` に置き、リポジトリには入れない。
 
 ## 編集時に重要な規約
 

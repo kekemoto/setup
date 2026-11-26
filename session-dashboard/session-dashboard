@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+# セッションダッシュボード（概要とセットアップは session-dashboard/README.md）
+#
+# 使い方:
+#   session-dashboard [--peer HOST]            一覧を表示
+#   session-dashboard [--peer HOST] ID         そのセッションの経緯を表示
+#   session-dashboard [--peer HOST] --rm ID    停止中の記録を消す
+# 内部用（_ で始まるもの）:
+#   _hook     Claude Code の hook から呼ぶ（標準入力に hook の JSON）
+#   _record   記録係。Stop の hook から非同期で呼ぶ（標準入力に hook の JSON）
+#   _dump     このサーバーの記録を判定済みの JSON で出す（相手側では ssh 越しに標準入力からこのスクリプトを読んで動かす）
+#   _rm SESSION_ID  停止中の記録を消す
+#
+# 相手側では「ssh HOST python3 - _dump < このファイル」で動かすので、標準ライブラリだけで書き、古い python3 でも動く書き方にする
+import contextlib
+import fcntl
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+from datetime import datetime
+
+STATE_DIR = os.path.expanduser("~/.local/state/session-dashboard")
+HERE = os.path.dirname(os.path.realpath(__file__))
+HOST = socket.gethostname().split(".")[0]
+IMPORTANCE = {"low": 10, "mid": 20, "high": 30, "urgent": 40}
+EFFORT = {"short": 0, "mid": 1, "long": 2}
+INTERRUPTED = "[Request interrupted by user"
+NO_PURPOSE = "（目的は未設定）"
+SSH_OPTS = ["-o", "ControlMaster=auto", "-o", "ControlPath=~/.ssh/cm-%C", "-o", "ControlPersist=10m", "-o", "BatchMode=yes"]
+
+
+def now():
+	return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def boot_id():
+	with open("/proc/sys/kernel/random/boot_id") as f:
+		return f.read().strip()
+
+
+def path_of(sid, suffix=".md"):
+	return os.path.join(STATE_DIR, sid + suffix)
+
+
+# ── 記録ファイルの読み書き ───────────────────────────────
+# frontmatter は YAML として読めるよう、値は JSON の形（JSON のスカラーは YAML としても読める）で書く
+# 入れ子は priority の 1 段だけ
+
+
+def read_record(sid):
+	try:
+		with open(path_of(sid), encoding="utf-8") as f:
+			text = f.read()
+	except FileNotFoundError:
+		return None
+	parts = text.split("---\n", 2)
+	if len(parts) != 3:
+		return None  # 壊れた記録（書きかけで落ちたなど）は無いものとして扱う。次の SessionStart で作り直される
+	_, head, body = parts
+	meta, parent = {}, None
+	for line in head.splitlines():
+		key, _, value = line.strip().partition(":")
+		value = value.strip()
+		if not line.startswith(" "):
+			parent = None
+		if not value:
+			parent = meta.setdefault(key, {})
+			continue
+		try:
+			value = json.loads(value)
+		except ValueError:
+			pass  # 手で書いた引用符なしの文字列（例: importance: high）
+		(parent if parent is not None else meta)[key] = value
+	return meta, body
+
+
+def write_record(meta, body):
+	lines = []
+	for key, value in meta.items():
+		if isinstance(value, dict):
+			lines.append(key + ":")
+			lines += ["  %s: %s" % (k, json.dumps(v, ensure_ascii=False)) for k, v in value.items()]
+		else:
+			lines.append("%s: %s" % (key, json.dumps(value, ensure_ascii=False)))
+	path = path_of(meta["session_id"])
+	tmp = path + ".tmp"
+	with open(tmp, "w", encoding="utf-8") as f:
+		f.write("---\n" + "\n".join(lines) + "\n---\n" + body)
+	os.replace(tmp, path)
+
+
+@contextlib.contextmanager
+def locked(sid, suffix=".lock"):
+	"""記録ファイルの読み書きの間だけ取る短いロック（hook と記録係の書き込みが互いに上書きしないように）"""
+	with open(path_of(sid, suffix), "w") as f:
+		fcntl.flock(f, fcntl.LOCK_EX)
+		yield
+
+
+def session_ids():
+	return [n[:-3] for n in os.listdir(STATE_DIR) if n.endswith(".md")]
+
+
+def remove_record(sid):
+	# ロックの中で消す（ロック中に読んだ記録を、消した後で書き戻されないように）
+	# ロックファイルは消さない（待っているプロセスと、後から開いたプロセスが別のファイルをロックして、排他が効かなくなるため）
+	with locked(sid):
+		for suffix in (".md", ".md.tmp"):
+			try:
+				os.remove(path_of(sid, suffix))
+			except FileNotFoundError:
+				pass
+
+
+def entries(lines):
+	"""transcript（JSONL）の各行を読む。壊れた行（書きかけなど）は飛ばす"""
+	for line in lines:
+		try:
+			yield json.loads(line)
+		except ValueError:
+			pass
+
+
+def messages(lines):
+	"""transcript の行のうち、ユーザーと AI の発言だけを返す（isMeta や /compact の要約など、発言でないものは飛ばす）"""
+	for entry in entries(lines):
+		if entry.get("type") in ("user", "assistant") and not entry.get("isMeta") and not entry.get("isCompactSummary"):
+			yield entry
+
+
+def message_texts(content):
+	if isinstance(content, str):
+		return [content]
+	return [c.get("text", "") for c in content if c.get("type") == "text"]
+
+
+# ── hook ─────────────────────────────────────────────
+
+
+def claude_pid():
+	"""hook の祖先をたどって claude 本体の pid を探す（見つからなければ None。死活は boot_id だけで判定する）"""
+	pid = os.getppid()
+	while pid > 1:
+		with open("/proc/%d/stat" % pid) as f:
+			stat = f.read()
+		if stat[stat.index("(") + 1 : stat.rindex(")")] == "claude":
+			return pid
+		pid = int(stat[stat.rindex(")") + 2 :].split()[1])
+	return None
+
+
+def set_status(meta, status):
+	"""status を変える。変わったかどうかを返す"""
+	if meta.get("status") == status:
+		return False
+	meta["status"] = status
+	meta["status_changed_at"] = now()
+	return True
+
+
+# ユーザーの答えを待つツール。動いている間は自分の番
+WAIT_TOOLS = ("AskUserQuestion", "ExitPlanMode")
+TOOL_EVENTS = ("PreToolUse", "PostToolUse", "PostToolUseFailure")
+
+
+def status_after(event, tool_name):
+	"""Stop・StopFailure・Notification・PreToolUse・PostToolUse(Failure) の後の status
+	許可に答えた瞬間を知らせるイベントは無いので、ツールの前後（PreToolUse・PostToolUse・PostToolUseFailure）で作業中に戻す"""
+	if event == "PreToolUse" and tool_name in WAIT_TOOLS:
+		return "user_turn"
+	return "ai_working" if event in TOOL_EVENTS else "user_turn"
+
+
+def new_record(data, where):
+	t = now()
+	meta = {"session_id": data["session_id"], "server": HOST, "started_at": t}
+	meta.update(where)
+	meta.update({"status": "user_turn", "status_changed_at": t, "purpose": "", "last_prompt": "", "ai_result": "", "priority": {"importance": "mid", "effort": "mid"}, "transcript_offset": 0})
+	body = "\n## 経緯\n"
+	# fork したセッションは、コピーされた親の会話を記録係に読ませない（分岐後の依頼から目的を作らせる）
+	# この時点では transcript がまだ無いので位置では区切れない。コピーされた発言は親のときの timestamp のままなので、時刻で区切る
+	if data.get("source") == "fork":
+		meta["copied_before"] = t
+		body += "- %s 別セッションから分岐\n" % t[11:16]
+	return meta, body
+
+
+def detach_others(sid, pid, boot):
+	"""同じ claude のプロセスにいた他のセッション（/branch した親など）に、プロセスを離れた印を付ける
+	SessionEnd が来ないまま別のセッションに切り替わっても、生きているように見えないように（一覧では停止中に出す）"""
+	def same_process(rec):
+		return rec and rec[0].get("pid") == pid and rec[0].get("boot_id") == boot
+
+	for other in session_ids():
+		if other == sid or not same_process(read_record(other)):
+			continue
+		with locked(other):
+			rec = read_record(other)  # ロックを取る前に別のプロセスで再開されていたら触らない
+			if same_process(rec):
+				rec[0]["detached"] = True
+				write_record(*rec)
+
+
+def hook(data):
+	event, sid = data["hook_event_name"], data["session_id"]
+	if os.environ.get("CLAUDE_CODE_ENTRYPOINT", "cli") != "cli":
+		return  # 対話モード以外（claude -p・Agent SDK）は対象外。-p では sdk-cli になる
+	if event in TOOL_EVENTS and data.get("agent_id"):
+		return  # サブエージェントのツールでは動かさない（応答が終わった後のバックグラウンドのエージェントで作業中に戻らないように）
+	if event == "SessionEnd":
+		remove_record(sid)
+		return
+	with locked(sid):
+		rec = read_record(sid)
+		if event == "SessionStart":
+			home = os.path.expanduser("~")
+			cwd = data["cwd"]
+			where = {
+				"cwd": "~" + cwd[len(home) :] if cwd == home or cwd.startswith(home + "/") else cwd,
+				"pid": claude_pid(),
+				"boot_id": boot_id(),
+				"transcript_path": data["transcript_path"],
+			}
+			if rec:
+				rec[0].update(where)
+				rec[0].pop("detached", None)
+				if data.get("source") == "resume":
+					set_status(rec[0], "user_turn")  # 再開した直後は入力待ち
+			else:
+				rec = new_record(data, where)
+			if where["pid"]:
+				detach_others(sid, where["pid"], where["boot_id"])
+		elif rec is None:
+			return  # 記録の無いセッション（導入前から動いているものなど）は触らない
+		elif event == "UserPromptSubmit":
+			set_status(rec[0], "ai_working")
+			rec[0]["last_prompt"] = " ".join(data.get("prompt", "").split())[:80]
+		elif not set_status(rec[0], status_after(event, data.get("tool_name"))):
+			return  # 変化なし（PreToolUse・PostToolUse はツールのたびに来るので、無駄に書き直さない）
+		write_record(*rec)
+
+
+# ── 記録係 ────────────────────────────────────────────
+
+SCHEMA = {
+	"type": "object",
+	"properties": {
+		"purpose": {"type": "string"},
+		"ai_result": {"type": "string"},
+		"importance": {"enum": list(IMPORTANCE)},
+		"effort": {"enum": list(EFFORT)},
+		"events": {"type": "array", "items": {"type": "string"}},
+	},
+	"required": ["purpose", "ai_result", "importance", "effort", "events"],
+}
+
+
+def parse_time(s):
+	return datetime.fromisoformat(s.replace("Z", "+00:00"))  # 古い python3 は Z を読めない
+
+
+def conversation(raw, copied_before=None):
+	"""transcript（JSONL）から、発言とツール名だけを取り出して読みやすくする
+	copied_before があれば、それより前の発言（fork でコピーされた親の会話）は飛ばす"""
+	out = []
+	cutoff = parse_time(copied_before) if copied_before else None
+	for entry in messages(raw.splitlines()):
+		if cutoff and parse_time(entry.get("timestamp", copied_before)) < cutoff:
+			continue
+		content = entry.get("message", {}).get("content", "")
+		who = "ユーザー" if entry["type"] == "user" else "AI"
+		out += ["%s: %s" % (who, t[:3000]) for t in message_texts(content) if t.strip()]
+		if isinstance(content, list):
+			out += ["AI: （%s を使用）" % c.get("name") for c in content if c.get("type") == "tool_use"]
+	text = "\n".join(out)
+	# 長すぎるときは、目的を作るための冒頭と、直近のやり取りだけを残す
+	return text if len(text) <= 60000 else text[:10000] + "\n…（中略）…\n" + text[-50000:]
+
+
+def record(data):
+	sid = data["session_id"]
+	if not os.path.exists(path_of(sid)):
+		return
+	# 同じセッションの記録係は順番に動かす。後から来たものは、前のものが拾い残した分をまとめて拾う
+	with locked(sid, ".rec.lock"):
+		rec = read_record(sid)
+		if rec is None:
+			return
+		meta = rec[0]
+		offset = meta.get("transcript_offset", 0)
+		with open(os.path.expanduser(meta["transcript_path"]), "rb") as f:
+			f.seek(offset)
+			raw = f.read()
+		raw = raw[: raw.rfind(b"\n") + 1]  # 書きかけの行は次回に回す
+		if not raw:
+			return
+		text = conversation(raw.decode("utf-8", "replace"), meta.get("copied_before"))
+		result = summarize(meta, text) if text else None
+		with locked(sid):
+			rec = read_record(sid)
+			if rec is None or rec[0].get("started_at") != meta.get("started_at"):
+				return  # 要約している間にセッションが閉じられた（作り直された記録には、古い位置で書き込まない）
+			meta, body = rec
+			if result:
+				# purpose は記録係の指示文で「原則変えない。ユーザーが変更を言ったときだけ変える」としている
+				meta["purpose"] = result["purpose"]
+				meta["ai_result"] = result["ai_result"]
+				meta["priority"] = {"importance": result["importance"], "effort": result["effort"]}
+				hhmm = datetime.now().strftime("%H:%M")
+				body += "".join("- %s %s\n" % (hhmm, " ".join(e.split())) for e in result["events"] if e.strip())
+			meta["transcript_offset"] = offset + len(raw)
+			write_record(meta, body)
+
+
+def summarize(meta, text):
+	with open(os.path.join(HERE, "recorder-prompt.md"), encoding="utf-8") as f:
+		system = f.read()
+	current = {k: meta.get(k, "") for k in ("purpose", "ai_result", "priority")}
+	prompt = "# 現在の記録\n%s\n\n# 新しく増えた会話\n%s" % (json.dumps(current, ensure_ascii=False), text)
+	# 作業中のセッションの環境変数を引き継がない（ログインに使うものは残す。.bashrc の _tab_autoname_start と揃える）
+	env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE") or k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN") or k.startswith("CLAUDE_CODE_USE_")}
+	# disableAllHooks で、記録係自身の呼び出しで hook が動く（記録ファイルができる・記録係が再帰的に動く）のを防ぐ
+	# フラグは .bashrc の tab_autoname と揃える
+	cmd = ["claude", "-p", "--model", "haiku", "--tools", "", "--settings", '{"disableAllHooks":true}', "--strict-mcp-config", "--mcp-config", "", "--disable-slash-commands", "--output-format", "json", "--no-session-persistence", "--json-schema", json.dumps(SCHEMA), "--system-prompt", system]
+	out = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=300, env=env, cwd=STATE_DIR, check=True).stdout
+	reply = json.loads(out)
+	if reply.get("is_error"):
+		raise RuntimeError("claude がエラーを返しました: %s" % reply.get("result"))
+	return reply["structured_output"]
+
+
+# ── 一覧 ──────────────────────────────────────────────
+
+
+def alive(pid):
+	try:
+		os.kill(int(pid), 0)
+	except ProcessLookupError:
+		return False
+	except PermissionError:
+		pass
+	return True
+
+
+def interrupted(transcript_path):
+	"""transcript の最後の発言が、Esc による中断かどうか"""
+	try:
+		with open(os.path.expanduser(transcript_path), "rb") as f:
+			f.seek(max(0, os.path.getsize(f.name) - 65536))
+			lines = f.read().decode("utf-8", "replace").splitlines()
+	except OSError:
+		return False
+	for entry in messages(reversed(lines)):
+		texts = message_texts(entry.get("message", {}).get("content", ""))
+		# 中断の後に打ったローカルのコマンド（/model・! のシェルモードなど。AI は動かない）の記録は飛ばす
+		if any(t.startswith(("<command-name>", "<local-command-", "<bash-")) for t in texts):
+			continue
+		return entry["type"] == "user" and any(t.startswith(INTERRUPTED) for t in texts)
+	return False
+
+
+def dump():
+	"""このサーバーの記録を、表示する欄（state）を判定して返す"""
+	out = []
+	if not os.path.isdir(STATE_DIR):
+		return out
+	current_boot = boot_id()
+	for sid in session_ids():
+		rec = read_record(sid)
+		if rec is None:
+			continue
+		meta, body = rec
+		pid = meta.get("pid")
+		if meta.get("detached") or meta.get("boot_id") != current_boot or (pid and not alive(pid)):
+			meta["state"] = "stopped"
+		elif meta.get("status") == "user_turn" or interrupted(meta.get("transcript_path", "")):
+			meta["state"] = "user_turn"
+		else:
+			meta["state"] = "ai_working"
+		meta["body"] = body
+		out.append(meta)
+	return out
+
+
+def run_on_peer(peer, *args, **kw):
+	"""相手側で、このスクリプトを標準入力から読ませて動かす"""
+	with open(os.path.realpath(__file__), "rb") as script:
+		return subprocess.run(["ssh"] + SSH_OPTS + [peer, "python3", "-"] + list(args), stdin=script, timeout=30, **kw)
+
+
+def collect(peer):
+	records = dump()
+	if peer:
+		# 相手に届かなくても、自分の分は表示する
+		# stderr はパイプにしない（ControlPersist で裏に残る ssh のマスターが握ったままになり、終わりを待って止まる）
+		try:
+			with tempfile.TemporaryFile() as err:
+				r = run_on_peer(peer, "_dump", stdout=subprocess.PIPE, stderr=err)
+				if r.returncode != 0:
+					err.seek(0)
+					raise RuntimeError(err.read().decode(errors="replace").strip())
+			records += json.loads(r.stdout)
+		except Exception as e:
+			print("※ %s の記録を読めませんでした: %s" % (peer, e), file=sys.stderr)
+	return records
+
+
+SECTIONS = [("user_turn", "自分の番"), ("ai_working", "AI 作業中"), ("stopped", "停止中（--resume で復旧）")]
+
+
+def sort_key(m):
+	p = m.get("priority") or {}
+	# importance は記録ファイルに数値が直接書かれていればその値を使う（仕様 6.2）。分からない値は mid
+	imp = p.get("importance")
+	imp = imp if isinstance(imp, (int, float)) else IMPORTANCE.get(imp, IMPORTANCE["mid"])
+	changed = parse_time(m["status_changed_at"]).timestamp()
+	return (-imp, EFFORT.get(p.get("effort"), EFFORT["mid"]), -changed)
+
+
+def show_list(records):
+	for state, title in SECTIONS:
+		rows = sorted((m for m in records if m["state"] == state), key=sort_key)
+		if not rows:
+			continue
+		print(("── %s " % title).ljust(50, "─"))
+		for m in rows:
+			print("[%s] %s   %s:%s" % (m["session_id"][:4], m.get("purpose") or NO_PURPOSE, m["server"], m["cwd"]))
+			if state == "stopped":
+				print("       cd %s && claude --resume %s" % (m["cwd"], m["session_id"]))
+			else:
+				print("       指示: %s" % m.get("last_prompt", ""))
+				print("       AI  : %s" % m.get("ai_result", ""))
+
+
+def find(records, prefix):
+	hits = [m for m in records if m["session_id"].startswith(prefix)]
+	if len(hits) != 1:
+		sys.exit("ID %s に当たる記録が %d 件あります" % (prefix, len(hits)))
+	return hits[0]
+
+
+def rm(m):
+	"""このサーバーの停止中の記録を消す"""
+	if m["state"] != "stopped":
+		sys.exit("動いているセッションの記録は消せません（セッションを閉じれば消えます）")
+	remove_record(m["session_id"])
+
+
+def main(args):
+	if args[:1] in (["_hook"], ["_record"]):
+		os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+		os.umask(0o077)
+		data = json.load(sys.stdin)
+		try:
+			(hook if args[0] == "_hook" else record)(data)
+		except Exception as e:  # 失敗しても Claude Code の動作は止めない。原因はログに残す
+			with open(os.path.join(STATE_DIR, "error.log"), "a") as f:
+				f.write("%s %s %s: %r\n" % (now(), args[0], data.get("session_id"), e))
+		return
+	if args[:1] == ["_dump"]:
+		json.dump(dump(), sys.stdout, ensure_ascii=False)
+		return
+	if args[:1] == ["_rm"]:
+		rm(find(dump(), args[1]))
+		return
+	peer = None
+	if args[:1] == ["--peer"]:
+		peer, args = args[1], args[2:]
+	records = collect(peer)
+	if not args:
+		show_list(records)
+	elif args[0] == "--rm":
+		m = find(records, args[1])
+		if m["server"] == HOST:
+			rm(m)
+		else:
+			run_on_peer(peer, "_rm", m["session_id"], check=True)
+	else:
+		m = find(records, args[0])
+		print("%s   %s:%s" % (m.get("purpose") or NO_PURPOSE, m["server"], m["cwd"]))
+		print(m["body"].rstrip())
+
+
+if __name__ == "__main__":
+	main(sys.argv[1:])
