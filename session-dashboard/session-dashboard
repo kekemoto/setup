@@ -140,13 +140,19 @@ def message_texts(content):
 # ── hook ─────────────────────────────────────────────
 
 
+# hook のコマンドを動かすシェル（claude_pid で飛ばす）
+SHELLS = ("sh", "bash", "dash", "zsh", "env")
+
+
 def claude_pid():
-	"""hook の祖先をたどって claude 本体の pid を探す（見つからなければ None。死活は boot_id だけで判定する）"""
+	"""hook を起動した claude（祖先のうち、シェルを除いた最初のプロセス）の pid を探す（見つからなければ None。死活は boot_id だけで判定する）
+	名前では探さない。バックグラウンドのセッションは claude daemon の子で動き、名前がバージョン番号になる。名前が claude の祖先まで遡ると
+	同じ daemon の他のセッションと pid が重なり、detach_others で生きているのに停止中にされる"""
 	pid = os.getppid()
 	while pid > 1:
 		with open("/proc/%d/stat" % pid) as f:
 			stat = f.read()
-		if stat[stat.index("(") + 1 : stat.rindex(")")] == "claude":
+		if stat[stat.index("(") + 1 : stat.rindex(")")] not in SHELLS:
 			return pid
 		pid = int(stat[stat.rindex(")") + 2 :].split()[1])
 	return None
@@ -297,7 +303,8 @@ def record(data):
 		raw = raw[: raw.rfind(b"\n") + 1]  # 書きかけの行は次回に回す
 		if not raw:
 			return
-		text = conversation(raw.decode("utf-8", "replace"), meta.get("copied_before"))
+		decoded = raw.decode("utf-8", "replace")
+		text = conversation(decoded, meta.get("copied_before"))
 		result = summarize(meta, text) if text else None
 		with locked(sid):
 			rec = read_record(sid)
@@ -311,6 +318,9 @@ def record(data):
 				meta["priority"] = {"importance": result["importance"], "effort": result["effort"]}
 				hhmm = datetime.now().strftime("%H:%M")
 				body += "".join("- %s %s\n" % (hhmm, " ".join(e.split())) for e in result["events"] if e.strip())
+			title = custom_title(decoded.splitlines())
+			if title:
+				meta["title"] = title
 			meta["transcript_offset"] = offset + len(raw)
 			write_record(meta, body)
 
@@ -345,14 +355,27 @@ def alive(pid):
 	return True
 
 
-def interrupted(transcript_path):
-	"""transcript の最後の発言が、Esc による中断かどうか"""
+def tail_lines(transcript_path):
+	"""transcript の末尾（64KB）の行。読めなければ空"""
 	try:
 		with open(os.path.expanduser(transcript_path), "rb") as f:
 			f.seek(max(0, os.path.getsize(f.name) - 65536))
-			lines = f.read().decode("utf-8", "replace").splitlines()
+			return f.read().decode("utf-8", "replace").splitlines()
 	except OSError:
-		return False
+		return []
+
+
+def custom_title(lines):
+	"""/rename で付けたセッション名のうち最後のもの（無ければ None）"""
+	# 名前の行は少ないので、文字列で絞ってから解析する
+	for entry in entries(l for l in reversed(lines) if '"custom-title"' in l):
+		if entry.get("type") == "custom-title" and entry.get("customTitle"):
+			return entry["customTitle"]
+	return None
+
+
+def interrupted(lines):
+	"""transcript の最後の発言が、Esc による中断かどうか"""
 	for entry in messages(reversed(lines)):
 		texts = message_texts(entry.get("message", {}).get("content", ""))
 		# 中断の後に打ったローカルのコマンド（/model・! のシェルモードなど。AI は動かない）の記録は飛ばす
@@ -374,9 +397,14 @@ def dump():
 			continue
 		meta, body = rec
 		pid = meta.get("pid")
-		if meta.get("detached") or meta.get("boot_id") != current_boot or (pid and not alive(pid)):
+		stopped = meta.get("detached") or meta.get("boot_id") != current_boot or (pid and not alive(pid))
+		# 停止中のものは transcript が増えないので読まない
+		lines = [] if stopped else tail_lines(meta.get("transcript_path", ""))
+		# セッションに名前が付いていれば、目的の代わりに表示する（末尾に無ければ、記録係が最後に見た名前）
+		meta["label"] = custom_title(lines) or meta.get("title") or meta.get("purpose") or NO_PURPOSE
+		if stopped:
 			meta["state"] = "stopped"
-		elif meta.get("status") == "user_turn" or interrupted(meta.get("transcript_path", "")):
+		elif meta.get("status") == "user_turn" or interrupted(lines):
 			meta["state"] = "user_turn"
 		else:
 			meta["state"] = "ai_working"
@@ -427,7 +455,7 @@ def show_list(records):
 			continue
 		print(("── %s " % title).ljust(50, "─"))
 		for m in rows:
-			print("[%s] %s   %s:%s" % (m["session_id"][:4], m.get("purpose") or NO_PURPOSE, m["server"], m["cwd"]))
+			print("[%s] %s   %s:%s" % (m["session_id"][:4], m["label"], m["server"], m["cwd"]))
 			if state == "stopped":
 				print("       cd %s && claude --resume %s" % (m["cwd"], m["session_id"]))
 			else:
@@ -480,7 +508,7 @@ def main(args):
 			run_on_peer(peer, "_rm", m["session_id"], check=True)
 	else:
 		m = find(records, args[0])
-		print("%s   %s:%s" % (m.get("purpose") or NO_PURPOSE, m["server"], m["cwd"]))
+		print("%s   %s:%s" % (m["label"], m["server"], m["cwd"]))
 		print(m["body"].rstrip())
 
 
