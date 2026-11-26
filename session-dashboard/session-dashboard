@@ -29,6 +29,8 @@ IMPORTANCE = {"low": 10, "mid": 20, "high": 30, "urgent": 40}
 EFFORT = {"short": 0, "mid": 1, "long": 2}
 INTERRUPTED = "[Request interrupted by user"
 NO_PURPOSE = "（目的は未設定）"
+# 本業ではないディレクトリ（cwd がこの配下のセッションは、重要度の初期値を low にする。会話で訂正されれば記録係が従う）
+LOW_IMPORTANCE_DIRS = ("~/setup",)
 SSH_OPTS = ["-o", "ControlMaster=auto", "-o", "ControlPath=~/.ssh/cm-%C", "-o", "ControlPersist=10m", "-o", "BatchMode=yes"]
 
 
@@ -170,21 +172,43 @@ def set_status(meta, status):
 # ユーザーの答えを待つツール。動いている間は自分の番
 WAIT_TOOLS = ("AskUserQuestion", "ExitPlanMode")
 TOOL_EVENTS = ("PreToolUse", "PostToolUse", "PostToolUseFailure")
+# 応答が終わった後で AI を呼び戻すツール（時間待ち・バックグラウンドの作業）。Bash は run_in_background のときだけ
+WAKE_TOOLS = ("ScheduleWakeup", "CronCreate", "Monitor", "Agent", "Workflow")
 
 
-def status_after(event, tool_name):
-	"""Stop・StopFailure・Notification・PreToolUse・PostToolUse(Failure) の後の status
-	許可に答えた瞬間を知らせるイベントは無いので、ツールの前後（PreToolUse・PostToolUse・PostToolUseFailure）で作業中に戻す"""
-	if event == "PreToolUse" and tool_name in WAIT_TOOLS:
-		return "user_turn"
-	return "ai_working" if event in TOOL_EVENTS else "user_turn"
+def under(path, d):
+	"""path が d そのものか、その配下か"""
+	return path == d or path.startswith(d + "/")
+
+
+def update_status(meta, event, data):
+	"""Stop・StopFailure・Notification・PreToolUse・PostToolUse(Failure) の後に status を変える。記録が変わったかどうかを返す
+	許可に答えた瞬間を知らせるイベントは無いので、ツールの前後で作業中に戻す
+	AI を後で呼び戻すツールを使った応答は、終わっても AI の番のままにする（wake: 応答の中で仕掛けた、waiting: 仕掛けて応答を終えた）。
+	呼び戻されるまでの idle_prompt の通知でも変えない"""
+	old = dict(meta)
+	tool = data.get("tool_name")
+	if event in TOOL_EVENTS:
+		meta.pop("waiting", None)
+		if event == "PreToolUse" and (tool in WAKE_TOOLS or tool == "Bash" and (data.get("tool_input") or {}).get("run_in_background")):
+			meta["wake"] = True
+		set_status(meta, "user_turn" if event == "PreToolUse" and tool in WAIT_TOOLS else "ai_working")
+	elif event == "Stop" and meta.pop("wake", False):
+		meta["waiting"] = True
+		set_status(meta, "ai_working")
+	elif not (event == "Notification" and data.get("notification_type") == "idle_prompt" and meta.get("waiting")):
+		meta.pop("waiting", None)
+		set_status(meta, "user_turn")
+	return meta != old
 
 
 def new_record(data, where):
 	t = now()
 	meta = {"session_id": data["session_id"], "server": HOST, "started_at": t}
 	meta.update(where)
-	meta.update({"status": "user_turn", "status_changed_at": t, "purpose": "", "last_prompt": "", "ai_result": "", "priority": {"importance": "mid", "effort": "mid"}, "transcript_offset": 0})
+	cwd = meta["cwd"]
+	importance = "low" if any(under(cwd, d) for d in LOW_IMPORTANCE_DIRS) else "mid"
+	meta.update({"status": "user_turn", "status_changed_at": t, "purpose": "", "last_prompt": "", "ai_result": "", "priority": {"importance": importance, "effort": "mid"}, "transcript_offset": 0})
 	body = "\n## 経緯\n"
 	# fork したセッションは、コピーされた親の会話を記録係に読ませない（分岐後の依頼から目的を作らせる）
 	# この時点では transcript がまだ無いので位置では区切れない。コピーされた発言は親のときの timestamp のままなので、時刻で区切る
@@ -225,7 +249,7 @@ def hook(data):
 			home = os.path.expanduser("~")
 			cwd = data["cwd"]
 			where = {
-				"cwd": "~" + cwd[len(home) :] if cwd == home or cwd.startswith(home + "/") else cwd,
+				"cwd": "~" + cwd[len(home) :] if under(cwd, home) else cwd,
 				"pid": claude_pid(),
 				"boot_id": boot_id(),
 				"transcript_path": data["transcript_path"],
@@ -244,7 +268,8 @@ def hook(data):
 		elif event == "UserPromptSubmit":
 			set_status(rec[0], "ai_working")
 			rec[0]["last_prompt"] = " ".join(data.get("prompt", "").split())[:80]
-		elif not set_status(rec[0], status_after(event, data.get("tool_name"))):
+			rec[0].pop("waiting", None)
+		elif not update_status(rec[0], event, data):
 			return  # 変化なし（PreToolUse・PostToolUse はツールのたびに来るので、無駄に書き直さない）
 		write_record(*rec)
 
@@ -355,23 +380,27 @@ def alive(pid):
 	return True
 
 
-def tail_lines(transcript_path):
-	"""transcript の末尾（64KB）の行。読めなければ空"""
+def tail_lines(transcript_path, size=65536):
+	"""transcript の末尾（size バイト）の行。読めなければ空"""
 	try:
 		with open(os.path.expanduser(transcript_path), "rb") as f:
-			f.seek(max(0, os.path.getsize(f.name) - 65536))
+			f.seek(max(0, os.path.getsize(f.name) - size))
 			return f.read().decode("utf-8", "replace").splitlines()
 	except OSError:
 		return []
 
 
+def last_entry(lines, entry_type):
+	"""lines のうち、type が entry_type の最後の行（無ければ None）。該当する行は少ないので、文字列で絞ってから解析する"""
+	for entry in entries(l for l in reversed(lines) if '"%s"' % entry_type in l):
+		if entry.get("type") == entry_type:
+			return entry
+	return None
+
+
 def custom_title(lines):
 	"""/rename で付けたセッション名のうち最後のもの（無ければ None）"""
-	# 名前の行は少ないので、文字列で絞ってから解析する
-	for entry in entries(l for l in reversed(lines) if '"custom-title"' in l):
-		if entry.get("type") == "custom-title" and entry.get("customTitle"):
-			return entry["customTitle"]
-	return None
+	return (last_entry(lines, "custom-title") or {}).get("customTitle")
 
 
 def interrupted(lines):
@@ -398,8 +427,13 @@ def dump():
 		meta, body = rec
 		pid = meta.get("pid")
 		stopped = meta.get("detached") or meta.get("boot_id") != current_boot or (pid and not alive(pid))
-		# 停止中のものは transcript が増えないので読まない
-		lines = [] if stopped else tail_lines(meta.get("transcript_path", ""))
+		# 停止中のものは、引き継ぎ（末尾の数行にある）を見るのに足りる分だけ読む
+		path = meta.get("transcript_path", "")
+		lines = tail_lines(path, 8192) if stopped else tail_lines(path)
+		if last_entry(lines, "continued-in"):
+			# 会話が別のセッションに引き継がれた（バックグラウンドに回したときなど）。SessionEnd が来ないので、ここで消す
+			remove_record(sid)
+			continue
 		# セッションに名前が付いていれば、目的の代わりに表示する（末尾に無ければ、記録係が最後に見た名前）
 		meta["label"] = custom_title(lines) or meta.get("title") or meta.get("purpose") or NO_PURPOSE
 		if stopped:
@@ -436,7 +470,7 @@ def collect(peer):
 	return records
 
 
-SECTIONS = [("user_turn", "自分の番"), ("ai_working", "AI 作業中"), ("stopped", "停止中（--resume で復旧）")]
+SECTIONS = [("user_turn", "自分の番"), ("ai_working", "AI 作業中"), ("stopped", "停止中")]
 
 
 def sort_key(m):
@@ -448,6 +482,13 @@ def sort_key(m):
 	return (-imp, EFFORT.get(p.get("effort"), EFFORT["mid"]), -changed)
 
 
+def print_session(m, *lines):
+	"""[ID]・目的・lines（見出し・中身の組）・場所の順に出す"""
+	print("[%s]" % m["session_id"][:4])
+	for name, value in (("目的", m["label"]),) + lines + (("場所", "%s:%s" % (m["server"], m["cwd"])),):
+		print("    %s：%s" % (name, value))
+
+
 def show_list(records):
 	for state, title in SECTIONS:
 		rows = sorted((m for m in records if m["state"] == state), key=sort_key)
@@ -455,12 +496,11 @@ def show_list(records):
 			continue
 		print(("── %s " % title).ljust(50, "─"))
 		for m in rows:
-			print("[%s] %s   %s:%s" % (m["session_id"][:4], m["label"], m["server"], m["cwd"]))
 			if state == "stopped":
-				print("       cd %s && claude --resume %s" % (m["cwd"], m["session_id"]))
+				print_session(m, ("再開", "cd %s && claude --resume %s" % (m["cwd"], m["session_id"])))
 			else:
-				print("       指示: %s" % m.get("last_prompt", ""))
-				print("       AI  : %s" % m.get("ai_result", ""))
+				print_session(m, ("指示", m.get("last_prompt", "")), ("AI", m.get("ai_result", "")))
+			print()
 
 
 def find(records, prefix):
@@ -508,7 +548,7 @@ def main(args):
 			run_on_peer(peer, "_rm", m["session_id"], check=True)
 	else:
 		m = find(records, args[0])
-		print("%s   %s:%s" % (m["label"], m["server"], m["cwd"]))
+		print_session(m)
 		print(m["body"].rstrip())
 
 
