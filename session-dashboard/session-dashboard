@@ -165,7 +165,6 @@ def set_status(meta, status):
 	if meta.get("status") == status:
 		return False
 	meta["status"] = status
-	meta["status_changed_at"] = now()
 	return True
 
 
@@ -204,7 +203,7 @@ def new_record(data, where):
 	meta.update(where)
 	cwd = meta["cwd"]
 	importance = "low" if any(under(cwd, d) for d in LOW_IMPORTANCE_DIRS) else "mid"
-	meta.update({"status": "user_turn", "status_changed_at": t, "purpose": "", "last_prompt": "", "ai_result": "", "priority": {"importance": importance, "effort": "mid"}, "transcript_offset": 0})
+	meta.update({"status": "user_turn", "purpose": "", "last_prompt": "", "ai_result": "", "priority": {"importance": importance, "effort": "mid"}, "transcript_offset": 0})
 	body = "\n## 経緯\n"
 	# fork したセッションは、コピーされた親の会話を記録係に読ませない（分岐後の依頼から目的を作らせる）
 	# この時点では transcript がまだ無いので位置では区切れない。コピーされた発言は親のときの timestamp のままなので、時刻で区切る
@@ -266,6 +265,7 @@ def hook(data):
 			prompt = data.get("prompt", "")
 			if not prompt.startswith("<task-notification>"):  # バックグラウンドの作業が終わった知らせは、ユーザーの指示ではない
 				rec[0]["last_prompt"] = " ".join(prompt.split())[:80]
+				rec[0]["last_prompt_at"] = now()
 		elif not update_status(rec[0], event, data):
 			return  # 変化なし（PreToolUse・PostToolUse はツールのたびに来るので、無駄に書き直さない）
 		write_record(*rec)
@@ -477,8 +477,9 @@ def sort_key(m):
 	# importance は記録ファイルに数値が直接書かれていればその値を使う（仕様 6.2）。分からない値は mid
 	imp = p.get("importance")
 	imp = imp if isinstance(imp, (int, float)) else IMPORTANCE.get(imp, IMPORTANCE["mid"])
-	changed = parse_time(m["status_changed_at"]).timestamp()
-	return (-imp, EFFORT.get(p.get("effort"), EFFORT["mid"]), -changed)
+	# 同じ重要度・所要時間の中では、指示を出したのが新しい順（まだ指示の無いものは、始めた時刻）
+	prompted = parse_time(m.get("last_prompt_at") or m["started_at"]).timestamp()
+	return (-imp, EFFORT.get(p.get("effort"), EFFORT["mid"]), -prompted)
 
 
 def print_session(m, *lines):
