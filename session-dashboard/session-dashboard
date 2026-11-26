@@ -172,8 +172,6 @@ def set_status(meta, status):
 # ユーザーの答えを待つツール。動いている間は自分の番
 WAIT_TOOLS = ("AskUserQuestion", "ExitPlanMode")
 TOOL_EVENTS = ("PreToolUse", "PostToolUse", "PostToolUseFailure")
-# 応答が終わった後で AI を呼び戻すツール（時間待ち・バックグラウンドの作業）。Bash は run_in_background のときだけ
-WAKE_TOOLS = ("ScheduleWakeup", "CronCreate", "Monitor", "Agent", "Workflow")
 
 
 def under(path, d):
@@ -184,22 +182,20 @@ def under(path, d):
 def update_status(meta, event, data):
 	"""Stop・StopFailure・Notification・PreToolUse・PostToolUse(Failure) の後に status を変える。記録が変わったかどうかを返す
 	許可に答えた瞬間を知らせるイベントは無いので、ツールの前後で作業中に戻す
-	AI を後で呼び戻すツールを使った応答は、終わっても AI の番のままにする（wake: 応答の中で仕掛けた、waiting: 仕掛けて応答を終えた）。
-	呼び戻されるまでの idle_prompt の通知でも変えない"""
-	old = dict(meta)
+	Stop では、後で AI を呼び戻すもの（まだ動いているバックグラウンドの作業・cron）を waiting_for に覚える（一覧では待機中に出す）"""
 	tool = data.get("tool_name")
 	if event in TOOL_EVENTS:
-		meta.pop("waiting", None)
-		if event == "PreToolUse" and (tool in WAKE_TOOLS or tool == "Bash" and (data.get("tool_input") or {}).get("run_in_background")):
-			meta["wake"] = True
-		set_status(meta, "user_turn" if event == "PreToolUse" and tool in WAIT_TOOLS else "ai_working")
-	elif event == "Stop" and meta.pop("wake", False):
-		meta["waiting"] = True
-		set_status(meta, "ai_working")
-	elif not (event == "Notification" and data.get("notification_type") == "idle_prompt" and meta.get("waiting")):
-		meta.pop("waiting", None)
-		set_status(meta, "user_turn")
-	return meta != old
+		return set_status(meta, "user_turn" if event == "PreToolUse" and tool in WAIT_TOOLS else "ai_working")
+	changed = set_status(meta, "user_turn")
+	if event == "Stop":
+		tasks = [t for t in data.get("background_tasks") or [] if t.get("status") == "running"] + list(data.get("session_crons") or [])
+		waiting = [t.get("description") or t.get("prompt") or t.get("type") or "?" for t in tasks]
+		changed |= meta.get("waiting_for", []) != waiting
+		if waiting:
+			meta["waiting_for"] = waiting
+		else:
+			meta.pop("waiting_for", None)
+	return changed
 
 
 def new_record(data, where):
@@ -267,8 +263,9 @@ def hook(data):
 			return  # 記録の無いセッション（導入前から動いているものなど）は触らない
 		elif event == "UserPromptSubmit":
 			set_status(rec[0], "ai_working")
-			rec[0]["last_prompt"] = " ".join(data.get("prompt", "").split())[:80]
-			rec[0].pop("waiting", None)
+			prompt = data.get("prompt", "")
+			if not prompt.startswith("<task-notification>"):  # バックグラウンドの作業が終わった知らせは、ユーザーの指示ではない
+				rec[0]["last_prompt"] = " ".join(prompt.split())[:80]
 		elif not update_status(rec[0], event, data):
 			return  # 変化なし（PreToolUse・PostToolUse はツールのたびに来るので、無駄に書き直さない）
 		write_record(*rec)
@@ -438,8 +435,10 @@ def dump():
 		meta["label"] = custom_title(lines) or meta.get("title") or meta.get("purpose") or NO_PURPOSE
 		if stopped:
 			meta["state"] = "stopped"
-		elif meta.get("status") == "user_turn" or interrupted(lines):
+		elif interrupted(lines) or meta.get("status") == "user_turn" and not meta.get("waiting_for"):
 			meta["state"] = "user_turn"
+		elif meta.get("status") == "user_turn":
+			meta["state"] = "waiting"
 		else:
 			meta["state"] = "ai_working"
 		meta["body"] = body
@@ -470,7 +469,7 @@ def collect(peer):
 	return records
 
 
-SECTIONS = [("user_turn", "自分の番"), ("ai_working", "AI 作業中"), ("stopped", "停止中")]
+SECTIONS = [("user_turn", "自分の番"), ("waiting", "待機中"), ("ai_working", "AI 作業中"), ("stopped", "停止中")]
 
 
 def sort_key(m):
@@ -499,7 +498,10 @@ def show_list(records):
 			if state == "stopped":
 				print_session(m, ("再開", "cd %s && claude --resume %s" % (m["cwd"], m["session_id"])))
 			else:
-				print_session(m, ("指示", m.get("last_prompt", "")), ("AI", m.get("ai_result", "")))
+				lines = [("指示", m.get("last_prompt", "")), ("AI", m.get("ai_result", ""))]
+				if state == "waiting":
+					lines.append(("待機", "、".join(m["waiting_for"])))
+				print_session(m, *lines)
 			print()
 
 
