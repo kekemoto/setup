@@ -25,12 +25,8 @@ from datetime import datetime
 
 STATE_DIR = os.path.expanduser("~/.local/state/session-dashboard")
 HERE = os.path.dirname(os.path.realpath(__file__))
-IMPORTANCE = {"low": "低", "mid": "中", "high": "高", "urgent": "急"}  # 低い順。値は一覧で ID の隣に出す印
-EFFORT = ("short", "mid", "long")
 INTERRUPTED = "[Request interrupted by user"
 NO_PURPOSE = "（目的は未設定）"
-# 本業ではないディレクトリ（cwd がこの配下のセッションは、重要度の初期値を low にする。会話で訂正されれば記録係が従う）
-LOW_IMPORTANCE_DIRS = ("~/setup",)
 DAY = 86400
 STOPPED_KEEP_DAYS = 7  # 停止中の記録は、最後に書き換えてからこの日数で消す
 SSH_OPTS = ["-o", "ControlMaster=auto", "-o", "ControlPath=~/.ssh/cm-%C", "-o", "ControlPersist=10m", "-o", "BatchMode=yes"]
@@ -91,7 +87,7 @@ def session_ids():
 
 
 # 一覧を作るときに記録へ足す、表示のための項目（記録ファイルには無い）
-VIEW_KEYS = ("label", "state", "importance", "effort", "local")
+VIEW_KEYS = ("label", "state", "local")
 
 
 def digest(meta):
@@ -253,9 +249,7 @@ def new_record(data, where):
 	t = now()
 	meta = {"session_id": data["session_id"], "started_at": t}
 	meta.update(where)
-	cwd = meta["cwd"]
-	importance = "low" if any(under(cwd, d) for d in LOW_IMPORTANCE_DIRS) else "mid"
-	meta.update({"status": "user_turn", "priority": {"importance": importance, "effort": "mid"}})
+	meta["status"] = "user_turn"
 	# fork したセッションは、コピーされた親の会話を記録係に読ませない（分岐後の依頼から目的を作らせる）
 	# この時点では transcript がまだ無いので位置では区切れない。コピーされた発言は親のときの timestamp のままなので、時刻で区切る
 	if data.get("source") == "fork":
@@ -366,10 +360,8 @@ SCHEMA = {
 	"properties": {
 		"purpose": {"type": "string"},
 		"ai_result": {"type": "string"},
-		"importance": {"enum": list(IMPORTANCE)},
-		"effort": {"enum": list(EFFORT)},
 	},
-	"required": ["purpose", "ai_result", "importance", "effort"],
+	"required": ["purpose", "ai_result"],
 }
 
 
@@ -439,7 +431,6 @@ def record(data):
 				# purpose は記録係の指示文で「原則変えない。ユーザーが変更を言ったときだけ変える」としている
 				meta["purpose"] = result["purpose"]
 				meta["ai_result"] = result["ai_result"]
-				meta["priority"] = {"importance": result["importance"], "effort": result["effort"]}
 			if title:
 				meta["title"] = title
 			meta["transcript_offset"] = offset + len(raw)
@@ -450,7 +441,7 @@ def record(data):
 def summarize(meta, text):
 	with open(os.path.join(HERE, "recorder-prompt.md"), encoding="utf-8") as f:
 		system = f.read()
-	current = {k: meta.get(k, "") for k in ("purpose", "ai_result", "priority")}
+	current = {k: meta.get(k, "") for k in ("purpose", "ai_result")}
 	prompt = "# 現在の記録\n%s\n\n# 新しく増えた会話\n%s" % (json.dumps(current, ensure_ascii=False), text)
 	# 作業中のセッションの環境変数を引き継がない（ログインに使うものは残す）。環境変数とフラグの扱いは .bashrc の _tab_autoname_start と揃える
 	env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE") or k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN") or k.startswith("CLAUDE_CODE_USE_")}
@@ -587,10 +578,6 @@ def dump():
 			meta["state"] = "waiting"
 		else:
 			meta["state"] = "ai_working"
-		# 優先度は記録係が付けるまで無いことがあるので、無いもの・知らない値は mid とみなす
-		p = meta.get("priority") or {}
-		for key, levels in (("importance", IMPORTANCE), ("effort", EFFORT)):
-			meta[key] = p.get(key) if p.get(key) in levels else "mid"
 		out.append(meta)
 	return out
 
@@ -627,9 +614,8 @@ SECTIONS = [("user_turn", "自分の番"), ("waiting", "待機中"), ("ai_workin
 
 
 def sort_key(m):
-	# 同じ重要度・所要時間の中では、指示を出したのが新しい順（まだ指示の無いものは、始めた時刻）
-	prompted = parse_time(m.get("last_prompt_at") or m["started_at"]).timestamp()
-	return (-list(IMPORTANCE).index(m["importance"]), EFFORT.index(m["effort"]), -prompted)
+	"""指示を出したのが新しい順（まだ指示の無いものは、始めた時刻）"""
+	return -parse_time(m.get("last_prompt_at") or m["started_at"]).timestamp()
 
 
 def shell_path(path):
@@ -650,8 +636,8 @@ def ago(iso):
 
 
 def print_session(m, *lines):
-	"""[ID] 優先度・目的・lines（見出し・中身の組）の順に出す"""
-	print("[%s] %s" % (m["session_id"][:4], IMPORTANCE[m["importance"]]))
+	"""[ID]・目的・lines（見出し・中身の組）の順に出す"""
+	print("[%s]" % m["session_id"][:4])
 	for name, value in (("目的", m["label"]),) + lines:
 		print("    %s：%s" % (name, value))
 
