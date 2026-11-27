@@ -18,7 +18,6 @@ import json
 import os
 import re
 import shlex
-import socket
 import subprocess
 import sys
 import tempfile
@@ -26,9 +25,8 @@ from datetime import datetime
 
 STATE_DIR = os.path.expanduser("~/.local/state/session-dashboard")
 HERE = os.path.dirname(os.path.realpath(__file__))
-HOST = socket.gethostname().split(".")[0]
-IMPORTANCE = {"low": 10, "mid": 20, "high": 30, "urgent": 40}
-EFFORT = {"short": 0, "mid": 1, "long": 2}
+IMPORTANCE = {"low": "低", "mid": "中", "high": "高", "urgent": "急"}  # 低い順。値は一覧で ID の隣に出す印
+EFFORT = ("short", "mid", "long")
 INTERRUPTED = "[Request interrupted by user"
 NO_PURPOSE = "（目的は未設定）"
 # 本業ではないディレクトリ（cwd がこの配下のセッションは、重要度の初期値を low にする。会話で訂正されれば記録係が従う）
@@ -93,7 +91,7 @@ def session_ids():
 
 
 # 一覧を作るときに記録へ足す、表示のための項目（記録ファイルには無い）
-VIEW_KEYS = ("server", "label", "state", "local")
+VIEW_KEYS = ("label", "state", "importance", "effort", "local")
 
 
 def digest(meta):
@@ -555,7 +553,7 @@ def judge(meta):
 
 
 def dump():
-	"""このサーバーの記録を、表示する欄（state）を判定して返す"""
+	"""このサーバーの記録に、表示のための項目（VIEW_KEYS のうち local 以外）を足して返す"""
 	out = []
 	if not os.path.isdir(STATE_DIR):
 		return out
@@ -579,7 +577,6 @@ def dump():
 			if meta is None:
 				continue
 			stopped, lines = judge(meta)
-		meta["server"] = HOST
 		# セッションに名前が付いていれば、目的の代わりに表示する（末尾に無ければ、記録係が最後に見た名前）
 		meta["label"] = custom_title(lines) or meta.get("title") or meta.get("purpose") or NO_PURPOSE
 		if stopped:
@@ -590,6 +587,10 @@ def dump():
 			meta["state"] = "waiting"
 		else:
 			meta["state"] = "ai_working"
+		# 優先度は記録係が付けるまで無いことがあるので、無いもの・知らない値は mid とみなす
+		p = meta.get("priority") or {}
+		for key, levels in (("importance", IMPORTANCE), ("effort", EFFORT)):
+			meta[key] = p.get(key) if p.get(key) in levels else "mid"
 		out.append(meta)
 	return out
 
@@ -605,7 +606,7 @@ def collect(peer):
 	"""自分と相手の記録と、相手の記録を読めたか（相手が無ければ真）を返す"""
 	records = dump()
 	for m in records:
-		m["local"] = True  # ホスト名が同じでも、どちらのサーバーの記録か分かるように
+		m["local"] = True  # --rm で、どちらのサーバーの記録かを見分ける
 	if peer:
 		# 相手に届かなくても、自分の分は表示する
 		# stderr はパイプにしない（ControlPersist で裏に残る ssh のマスターが握ったままになり、終わりを待って止まる）
@@ -626,11 +627,9 @@ SECTIONS = [("user_turn", "自分の番"), ("waiting", "待機中"), ("ai_workin
 
 
 def sort_key(m):
-	p = m.get("priority") or {}
-	imp = IMPORTANCE.get(p.get("importance"), IMPORTANCE["mid"])
 	# 同じ重要度・所要時間の中では、指示を出したのが新しい順（まだ指示の無いものは、始めた時刻）
 	prompted = parse_time(m.get("last_prompt_at") or m["started_at"]).timestamp()
-	return (-imp, EFFORT.get(p.get("effort"), EFFORT["mid"]), -prompted)
+	return (-list(IMPORTANCE).index(m["importance"]), EFFORT.index(m["effort"]), -prompted)
 
 
 def shell_path(path):
@@ -651,9 +650,9 @@ def ago(iso):
 
 
 def print_session(m, *lines):
-	"""[ID]・目的・lines（見出し・中身の組）・場所の順に出す"""
-	print("[%s]" % m["session_id"][:4])
-	for name, value in (("目的", m["label"]),) + lines + (("場所", "%s:%s" % (m["server"], m["cwd"])),):
+	"""[ID] 優先度・目的・lines（見出し・中身の組）の順に出す"""
+	print("[%s] %s" % (m["session_id"][:4], IMPORTANCE[m["importance"]]))
+	for name, value in (("目的", m["label"]),) + lines:
 		print("    %s：%s" % (name, value))
 
 
